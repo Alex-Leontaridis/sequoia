@@ -1,0 +1,1 @@
+// Content script for ChatGPT Compressor Extension 

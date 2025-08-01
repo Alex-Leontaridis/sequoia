@@ -1,0 +1,1 @@
+// Injected script for ChatGPT Compressor Extension 

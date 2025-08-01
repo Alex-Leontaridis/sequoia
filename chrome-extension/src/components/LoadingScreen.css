@@ -1,0 +1,69 @@
+/* LoadingScreen Component Styles - Updated to match exact specifications */
+
+.loading-screen {
+  position: relative;
+  width: 320px;
+  height: 480px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+
+}
+
+.loading-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Sequoia Logo - centered both vertically and horizontally */
+.sequoia-logo {
+  position: absolute;
+  left: 50%;
+  top: 165px;
+  z-index: 10;
+  text-align: center;
+  opacity: 0;
+  transform: translate(-50%, -50%) translateY(20px);
+  transition: all 0.8s ease-in-out;
+}
+
+.sequoia-logo.show {
+  opacity: 1;
+}
+
+.sequoia-logo h1 {
+  font-family: 'Azeret Mono', monospace;
+  font-weight: 500;
+  font-size: 50px;
+  line-height: 1.167em;
+  color: #9CA3AF;
+  margin: 0;
+  text-align: center;
+}
+
+/* Graphics Container - positioned according to Figma specifications */
+.graphics-container {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  z-index: 1;
+}
+
+.graphics-container img {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
+
