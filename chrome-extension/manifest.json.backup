@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "Sequoia",
+  "version": "1.0.0",
+  "description": "Compresses ChatGPT messages to reduce token usage",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "http://localhost:8002/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": ["src/content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_popup": "pages/popup/popup.html",
+    "default_title": "ChatGPT Compressor"
+  },
+  "icons": {
+    "16": "assets/image.png",
+    "48": "assets/image.png",
+    "128": "assets/image.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["src/injected.js"],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ]
+    }
+  ]
+} 

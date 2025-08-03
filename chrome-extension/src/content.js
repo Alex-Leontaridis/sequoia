@@ -1,108 +1,211 @@
-// Content script for ChatGPT Message Logger Extension with Spanish modification
+// Content script for Sequoia AI Message Logger Extension
 // Bridge between page world and extension context to avoid CSP issues
 
 // Prevent multiple executions
-if (window.chatgptLoggerExtensionLoaded) {
-    console.log('🔧 ChatGPT Message Logger Extension: Already loaded, skipping...');
+if (window.sequoiaExtensionLoaded) {
+    console.log('🔧 Sequoia AI Message Logger Extension: Already loaded, skipping...');
 } else {
-    window.chatgptLoggerExtensionLoaded = true;
+    window.sequoiaExtensionLoaded = true;
     
-    // Extension context (isolated world) - bridge to background script
-window.addEventListener('message', (event) => {
-    if (event.source !== window) return;
-    if (event.data?.type !== 'LOG_MESSAGE_REQUEST') return;
+        // Extension context (isolated world) - bridge to background script
+    window.addEventListener('message', (event) => {
+        if (event.source !== window) return;
+        if (event.data?.type !== 'LOG_MESSAGE_REQUEST') return;
 
-    // Check if extension context is still valid
-    try {
-        if (!chrome.runtime || !chrome.runtime.id) {
-            console.log('🔧 ChatGPT Message Logger Extension: Context invalidated, skipping...');
-            window.postMessage({
-                type: 'LOG_MESSAGE_RESPONSE',
-                id: event.data.id,
-                result: { error: 'Extension context invalidated' }
-            }, '*');
-            return;
-        }
-
-        // Forward to background script
-        chrome.runtime.sendMessage(
-            { action: 'logMessage', message: event.data.message, url: event.data.url },
-            (response) => {
-                // Check for errors
-                if (chrome.runtime.lastError) {
-                    console.log('🔧 ChatGPT Message Logger Extension: Runtime error:', chrome.runtime.lastError);
+        // Check if compression is paused
+        try {
+            chrome.storage.local.get(['isPaused'], (result) => {
+                if (result.isPaused) {
+                    // If paused, send back original message without compression
                     window.postMessage({
                         type: 'LOG_MESSAGE_RESPONSE',
                         id: event.data.id,
-                        result: { error: chrome.runtime.lastError.message }
+                        result: { 
+                            error: 'Compression paused',
+                            original: event.data.message,
+                            compressed: event.data.message,
+                            compression_ratio: 0,
+                            method: 'paused'
+                        }
                     }, '*');
                     return;
                 }
 
-                // Send response back to page world
+                // Check if extension context is still valid with better error handling
+                try {
+                    // More robust context validation
+                    if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
+                        console.log('🔧 Sequoia AI Message Logger Extension: Context invalidated, skipping...');
+                        window.postMessage({
+                            type: 'LOG_MESSAGE_RESPONSE',
+                            id: event.data.id,
+                            result: { error: 'Extension context invalidated' }
+                        }, '*');
+                        return;
+                    }
+
+                // Forward to background script with timeout protection
+                const messageTimeout = setTimeout(() => {
+                    console.log('🔧 Sequoia AI Message Logger Extension: Message timeout');
+                    window.postMessage({
+                        type: 'LOG_MESSAGE_RESPONSE',
+                        id: event.data.id,
+                        result: { error: 'Message timeout - extension may be reloading' }
+                    }, '*');
+                }, 5000); // 5 second timeout
+
+                chrome.runtime.sendMessage(
+                    { action: 'logMessage', message: event.data.message, url: event.data.url },
+                    (response) => {
+                        clearTimeout(messageTimeout);
+                        
+                        // Check for errors
+                        if (chrome.runtime.lastError) {
+                            console.log('🔧 Sequoia AI Message Logger Extension: Runtime error:', chrome.runtime.lastError);
+                            window.postMessage({
+                                type: 'LOG_MESSAGE_RESPONSE',
+                                id: event.data.id,
+                                result: { error: chrome.runtime.lastError.message }
+                            }, '*');
+                            return;
+                        }
+
+                        // Send response back to page world
+                        window.postMessage({
+                            type: 'LOG_MESSAGE_RESPONSE',
+                            id: event.data.id,
+                            result: response
+                        }, '*');
+                    }
+                );
+            } catch (error) {
+                console.log('🔧 Sequoia AI Message Logger Extension: Caught extension error:', error.message);
                 window.postMessage({
                     type: 'LOG_MESSAGE_RESPONSE',
                     id: event.data.id,
-                    result: response
+                    result: { error: 'Extension context error: ' + error.message }
                 }, '*');
             }
-        );
+        });
     } catch (error) {
-        console.log('🔧 ChatGPT Message Logger Extension: Caught extension error:', error.message);
+        console.log('🔧 Sequoia AI Message Logger Extension: Storage access error:', error.message);
+        // If we can't access storage, assume not paused and try to proceed
         window.postMessage({
             type: 'LOG_MESSAGE_RESPONSE',
             id: event.data.id,
-            result: { error: 'Extension context error: ' + error.message }
+            result: { error: 'Storage access error: ' + error.message }
         }, '*');
     }
 });
 
-    // Check service health via background script
+    // Listen for pause toggle messages from popup
     try {
-        if (chrome.runtime && chrome.runtime.id) {
+        chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+            if (request.type === 'PAUSE_TOGGLE') {
+                console.log('🔧 Sequoia AI Message Logger Extension: Pause state changed to:', request.isPaused);
+                // Forward the pause state to the injected script
+                window.postMessage({
+                    type: 'PAUSE_STATE_UPDATE',
+                    isPaused: request.isPaused
+                }, '*');
+                // Send response to acknowledge receipt
+                sendResponse({ success: true });
+            }
+            return true; // Keep the message channel open for async response
+        });
+    } catch (error) {
+        console.log('🔧 Sequoia AI Message Logger Extension: Message listener setup error:', error.message);
+    }
+
+    // Check service health via background script with better error handling
+    const checkServiceHealth = () => {
+        try {
+            if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
+                console.log('🔧 Sequoia AI Message Logger Extension: Cannot check service health - context invalid');
+                return;
+            }
+
             chrome.runtime.sendMessage({ action: 'checkServiceHealth' }, (response) => {
                 if (chrome.runtime.lastError) {
-                    console.log('🔧 ChatGPT Message Logger Extension: Health check failed:', chrome.runtime.lastError);
+                    console.log('🔧 Sequoia AI Message Logger Extension: Health check failed:', chrome.runtime.lastError);
                     return;
                 }
                 if (response && response.status === 'healthy') {
-                    console.log('[ChatGPT Logger] Message logger service is running ✓');
-                    console.log('[ChatGPT Logger] Total messages logged:', response.total_messages);
+                    console.log('[Sequoia AI Logger] Message logger service is running ✓');
+                    console.log('[Sequoia AI Logger] Total messages logged:', response.total_messages);
                 } else {
-                    console.error('[ChatGPT Logger] Service status:', response?.status || 'unknown');
+                    console.error('[Sequoia AI Logger] Service status:', response?.status || 'unknown');
                 }
             });
+        } catch (error) {
+            console.log('🔧 Sequoia AI Message Logger Extension: Health check error:', error.message);
         }
+    };
+
+    // Initial health check with delay to allow extension to stabilize
+    setTimeout(checkServiceHealth, 1000);
+
+    // Load initial pause state and notify injected script
+    try {
+        chrome.storage.local.get(['isPaused'], (result) => {
+            const initialPauseState = result.isPaused || false;
+            console.log('🔧 Sequoia AI Message Logger Extension: Initial pause state:', initialPauseState);
+            
+            // Notify injected script of initial pause state after a delay
+            setTimeout(() => {
+                window.postMessage({
+                    type: 'PAUSE_STATE_UPDATE',
+                    isPaused: initialPauseState
+                }, '*');
+            }, 1000);
+        });
     } catch (error) {
-        console.log('🔧 ChatGPT Message Logger Extension: Health check error:', error.message);
+        console.log('🔧 Sequoia AI Message Logger Extension: Initial storage access error:', error.message);
+        // Default to not paused if storage is unavailable
+        setTimeout(() => {
+            window.postMessage({
+                type: 'PAUSE_STATE_UPDATE',
+                isPaused: false
+            }, '*');
+        }, 1000);
     }
 
     // Inject the main interceptor script into page world using a separate file
     // Check if already injected to prevent duplicates
-    try {
-        if (chrome.runtime && chrome.runtime.id && !document.querySelector('script[data-chatgpt-logger-injected]')) {
-            const scriptElement = document.createElement('script');
-            scriptElement.src = chrome.runtime.getURL('dist/injected.js');
-            scriptElement.setAttribute('data-chatgpt-logger-injected', 'true');
-            
-            scriptElement.onload = function() {
-                console.log('🔧 ChatGPT Message Logger Extension: Injected script loaded successfully');
-                // Don't remove the script element to keep the data attribute
-            };
-            
-            scriptElement.onerror = function() {
-                console.error('🔧 ChatGPT Message Logger Extension: Failed to load injected script');
-                this.remove();
-            };
+    const injectScript = () => {
+        try {
+            if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
+                console.log('🔧 Sequoia AI Message Logger Extension: Cannot inject script - context invalid');
+                return;
+            }
 
-            // Inject the script
-            (document.head || document.documentElement).appendChild(scriptElement);
-        } else if (document.querySelector('script[data-chatgpt-logger-injected]')) {
-            console.log('🔧 ChatGPT Message Logger Extension: Injected script already present');
+            if (!document.querySelector('script[data-sequoia-logger-injected]')) {
+                const scriptElement = document.createElement('script');
+                scriptElement.src = chrome.runtime.getURL('dist/injected.js');
+                scriptElement.setAttribute('data-sequoia-logger-injected', 'true');
+                
+                scriptElement.onload = function() {
+                    console.log('🔧 Sequoia AI Message Logger Extension: Injected script loaded successfully');
+                    // Don't remove the script element to keep the data attribute
+                };
+                
+                scriptElement.onerror = function() {
+                    console.error('🔧 Sequoia AI Message Logger Extension: Failed to load injected script');
+                    this.remove();
+                };
+
+                // Inject the script
+                (document.head || document.documentElement).appendChild(scriptElement);
+            } else {
+                console.log('🔧 Sequoia AI Message Logger Extension: Injected script already present');
+            }
+        } catch (error) {
+            console.log('🔧 Sequoia AI Message Logger Extension: Script injection error:', error.message);
         }
-    } catch (error) {
-        console.log('🔧 ChatGPT Message Logger Extension: Script injection error:', error.message);
-    }
+    };
 
-    console.log('🔧 ChatGPT Message Logger Extension: Content script bridge loaded!');
-} 
+    // Inject script with delay to allow extension to stabilize
+    setTimeout(injectScript, 500);
+
+    console.log('🔧 Sequoia AI Message Logger Extension: Content script bridge loaded!');
+}

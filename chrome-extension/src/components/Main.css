@@ -38,6 +38,45 @@
   gap: 12px;
 }
 
+.header-icons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pause-icon {
+  cursor: pointer;
+  color: #9CA3AF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.pause-icon:hover {
+  opacity: 0.7;
+  background-color: rgba(156, 163, 175, 0.1);
+}
+
+.pause-icon.paused {
+  color: #EF4444;
+}
+
+.pause-icon.paused:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.pause-icon.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pause-icon.disabled:hover {
+  background-color: transparent;
+}
+
 .settings-icon {
   cursor: pointer;
   color: #9CA3AF;
@@ -45,10 +84,13 @@
   align-items: center;
   justify-content: center;
   transition: opacity 0.2s ease;
+  padding: 4px;
+  border-radius: 4px;
 }
 
 .settings-icon:hover {
   opacity: 0.7;
+  background-color: rgba(156, 163, 175, 0.1);
 }
 
 .sequoia-title {

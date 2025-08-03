@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Sequoia",
   "version": "1.0.0",
-  "description": "Automatically compresses ChatGPT messages for better efficiency",
+  "description": "Automatically compresses ChatGPT and Claude AI messages for better efficiency",
   "permissions": [
     "activeTab", "tabs",
     "storage",
@@ -13,6 +13,8 @@
     "https://*.chatgpt.com/*",
     "https://chat.openai.com/*",
     "https://*.chat.openai.com/*",
+    "https://claude.ai/*",
+    "https://*.claude.ai/*",
     "http://localhost:8002/*"
   ],
   "background": {
@@ -24,7 +26,9 @@
         "https://chatgpt.com/*",
         "https://*.chatgpt.com/*",
         "https://chat.openai.com/*",
-        "https://*.chat.openai.com/*"
+        "https://*.chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://*.claude.ai/*"
       ],
       "js": ["dist/content.js"],
       "run_at": "document_start"
@@ -32,7 +36,7 @@
   ],
   "action": {
     "default_popup": "dist/popup.html",
-    "default_title": "ChatGPT Message Compressor"
+    "default_title": "Sequoia - AI Message Compressor"
   },
   "icons": {
     "16": "assets/image.png",
@@ -46,7 +50,9 @@
         "https://chatgpt.com/*",
         "https://*.chatgpt.com/*",
         "https://chat.openai.com/*",
-        "https://*.chat.openai.com/*"
+        "https://*.chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://*.claude.ai/*"
       ]
     }
   ]

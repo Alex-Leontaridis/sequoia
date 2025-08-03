@@ -1,19 +1,22 @@
-// Injected script that runs in the page world to intercept ChatGPT messages
+// Injected script that runs in the page world to intercept ChatGPT and Claude AI messages
 (function() {
     'use strict';
     
     // Prevent multiple executions
-    if (window.chatgptLoggerInjectedLoaded) {
-        console.log("🔧 ChatGPT Message Logger Extension: Page interceptor already loaded, skipping...");
+    if (window.aiMessageLoggerInjectedLoaded) {
+        console.log("🔧 Sequoia AI Message Logger Extension: Page interceptor already loaded, skipping...");
         return;
     }
-    window.chatgptLoggerInjectedLoaded = true;
+    window.aiMessageLoggerInjectedLoaded = true;
     
-    console.log("🔧 ChatGPT Message Logger Extension: Page interceptor loaded!");
+    console.log("🔧 Sequoia AI Message Logger Extension: Page interceptor loaded!");
+    
+    // Track pause state
+    let isPaused = false;
     
     const DEBUG = true;
     
-    // ChatGPT API endpoints to monitor
+    // AI service API endpoints to monitor
     const CHATGPT_ENDPOINTS = [
         'backend-api',
         'api.openai.com',
@@ -21,14 +24,18 @@
         'chat.openai.com/api'
     ];
     
+    const CLAUDE_ENDPOINTS = [
+        'claude.ai/api'
+    ];
+    
     function log(...args) {
         if (DEBUG) {
-            console.log('[ChatGPT Logger]', ...args);
+            console.log('[AI Message Logger]', ...args);
         }
     }
     
     function error(...args) {
-        console.error('[ChatGPT Logger]', ...args);
+        console.error('[AI Message Logger]', ...args);
     }
     
     // Check if URL is a ChatGPT API endpoint
@@ -36,8 +43,18 @@
         return CHATGPT_ENDPOINTS.some(endpoint => url.includes(endpoint));
     }
     
-    // Find user messages in request body
-    function extractUserMessage(bodyData) {
+    // Check if URL is a Claude AI API endpoint
+    function isClaudeEndpoint(url) {
+        return CLAUDE_ENDPOINTS.some(endpoint => url.includes(endpoint));
+    }
+    
+    // Check if URL is any supported AI service endpoint
+    function isAIServiceEndpoint(url) {
+        return isChatGPTEndpoint(url) || isClaudeEndpoint(url);
+    }
+    
+    // Find user messages in request body for ChatGPT
+    function extractChatGPTUserMessage(bodyData) {
         try {
             // Handle ChatGPT's message structure
             if (bodyData.messages && Array.isArray(bodyData.messages)) {
@@ -60,6 +77,7 @@
                         
                         if (content && content.length > 10) {
                             return {
+                                type: 'chatgpt',
                                 messageIndex: i,
                                 originalContent: content,
                                 message: message
@@ -71,13 +89,42 @@
             
             return null;
         } catch (e) {
-            error('Error extracting user message:', e);
+            error('Error extracting ChatGPT user message:', e);
             return null;
         }
     }
     
-    // Update message content in the request body
-    function updateMessageContent(message, newContent) {
+    // Find user prompt in Claude's request body
+    function extractClaudeUserMessage(bodyData) {
+        try {
+            // Handle Claude's prompt structure
+            if (bodyData.prompt && typeof bodyData.prompt === 'string' && bodyData.prompt.length > 10) {
+                return {
+                    type: 'claude',
+                    originalContent: bodyData.prompt,
+                    bodyData: bodyData
+                };
+            }
+            
+            return null;
+        } catch (e) {
+            error('Error extracting Claude user message:', e);
+            return null;
+        }
+    }
+    
+    // Extract user message from either ChatGPT or Claude request
+    function extractUserMessage(bodyData, url) {
+        if (isChatGPTEndpoint(url)) {
+            return extractChatGPTUserMessage(bodyData);
+        } else if (isClaudeEndpoint(url)) {
+            return extractClaudeUserMessage(bodyData);
+        }
+        return null;
+    }
+    
+    // Update message content in ChatGPT request body
+    function updateChatGPTMessageContent(message, newContent) {
         try {
             if (typeof message.content === 'string') {
                 message.content = newContent;
@@ -88,9 +135,30 @@
             }
             return true;
         } catch (e) {
-            error('Error updating message content:', e);
+            error('Error updating ChatGPT message content:', e);
             return false;
         }
+    }
+    
+    // Update prompt content in Claude request body
+    function updateClaudeMessageContent(bodyData, newContent) {
+        try {
+            bodyData.prompt = newContent;
+            return true;
+        } catch (e) {
+            error('Error updating Claude message content:', e);
+            return false;
+        }
+    }
+    
+    // Update message content based on service type
+    function updateMessageContent(userMessageData, newContent) {
+        if (userMessageData.type === 'chatgpt') {
+            return updateChatGPTMessageContent(userMessageData.message, newContent);
+        } else if (userMessageData.type === 'claude') {
+            return updateClaudeMessageContent(userMessageData.bodyData, newContent);
+        }
+        return false;
     }
     
     // Get compressed message from backend
@@ -186,6 +254,43 @@
         });
     }
     
+    // Show pause/resume notification
+    function showPauseNotification(paused) {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${paused ? '#EF4444' : '#10b981'};
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            font-family: system-ui, sans-serif;
+            font-size: 14px;
+            max-width: 300px;
+        `;
+        
+        notification.innerHTML = `
+            <div style="font-weight: 600; margin-bottom: 4px;">
+                ${paused ? '⏸️ Compression Paused' : '▶️ Compression Resumed'}
+            </div>
+            <div style="font-size: 12px; opacity: 0.9;">
+                ${paused ? 'Messages will be sent without compression' : 'Messages will be compressed again'}
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 3000);
+    }
+
     // Show modification notification
     function showModificationResult(original, modified) {
         const notification = document.createElement('div');
@@ -222,19 +327,32 @@
         }, 3000);
     }
     
+    // Listen for pause state updates from content script
+    window.addEventListener('message', (event) => {
+        if (event.source !== window) return;
+        if (event.data?.type === 'PAUSE_STATE_UPDATE') {
+            isPaused = event.data.isPaused;
+            console.log('🔧 Sequoia AI Message Logger Extension: Pause state updated to:', isPaused);
+            
+            // Show pause/resume notification
+            showPauseNotification(isPaused);
+        }
+    });
+
     // Store original fetch
     const originalFetch = window.fetch;
     
     // Intercept fetch requests
     window.fetch = async function(url, options = {}) {
         try {
-            // Check if this is a ChatGPT API call
-            if (typeof url === 'string' && isChatGPTEndpoint(url)) {
-                log('Intercepted ChatGPT API call:', url);
+            // Check if this is an AI service API call
+            if (typeof url === 'string' && isAIServiceEndpoint(url)) {
+                const serviceName = isChatGPTEndpoint(url) ? 'ChatGPT' : 'Claude AI';
+                log(`Intercepted ${serviceName} API call:`, url);
                 
-                // Only process POST requests with body that contain conversations
+                // Only process POST requests with body that contain conversations/completions
                 if (options.method === 'POST' && options.body && 
-                    (url.includes('conversation') || url.includes('chat'))) {
+                    (url.includes('conversation') || url.includes('chat') || url.includes('completion'))) {
                     
                     let bodyData;
                     
@@ -246,20 +364,26 @@
                     }
                     
                     // Extract user message
-                    const userMessageData = extractUserMessage(bodyData);
+                    const userMessageData = extractUserMessage(bodyData, url);
                     if (!userMessageData) {
                         log('No user message found or too short');
                         return originalFetch.call(this, url, options);
                     }
                     
-                    log('Found user message:', userMessageData.originalContent.substring(0, 100) + '...');
+                    log(`Found ${serviceName} user message:`, userMessageData.originalContent.substring(0, 100) + '...');
+                    
+                    // Check if compression is paused
+                    if (isPaused) {
+                        log('⏸️ Compression is paused, sending original message');
+                        return originalFetch.call(this, url, options);
+                    }
                     
                     // Get compressed message from backend
                     log('🔄 Getting compressed version of message...');
                     const compressedContent = await getCompressedMessage(userMessageData.originalContent);
                     
                     // Update the message in the request body with compressed version
-                    const updateSuccess = updateMessageContent(userMessageData.message, compressedContent);
+                    const updateSuccess = updateMessageContent(userMessageData, compressedContent);
                     
                     if (updateSuccess && compressedContent !== userMessageData.originalContent) {
                         // Update the request body
@@ -268,7 +392,7 @@
                         // Show notification
                         showModificationResult(userMessageData.originalContent, compressedContent);
                         
-                        log('Message compressed and sent successfully');
+                        log(`${serviceName} message compressed and sent successfully`);
                         log('Original:', userMessageData.originalContent);
                         log('Compressed:', compressedContent);
                         
@@ -287,6 +411,6 @@
         return originalFetch.call(this, url, options);
     };
     
-    log('ChatGPT Message Modifier loaded - will add Spanish instructions');
+    log('AI Message Modifier loaded - will compress messages for ChatGPT and Claude AI');
     
 })();

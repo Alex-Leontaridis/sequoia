@@ -1,0 +1,2 @@
+    console.log("🔧 ChatGPT Compressor Extension: Content script loaded!");
+    console.log("🔧 ChatGPT Compressor Extension: Looking for ChatGPT pages...");

@@ -1,7 +1,7 @@
-// Background service worker for ChatGPT Message Logger Extension
+// Background service worker for Sequoia AI Message Logger Extension
 
 const LOGGER_SERVICE_URL = 'http://localhost:8002';
-console.log("🔧 ChatGPT Message Logger Extension: Background script loaded!");
+console.log("🔧 Sequoia AI Message Logger Extension: Background script loaded!");
 
 // Service management
 class MessageLoggerServiceManager {
@@ -138,29 +138,33 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Extension installation/update handling
 chrome.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {
-        console.log('ChatGPT Message Logger Extension installed');
+        console.log('Sequoia AI Message Logger Extension installed');
         
         // Open welcome page
         chrome.tabs.create({
             url: chrome.runtime.getURL('pages/popup/popup.html')
         });
     } else if (details.reason === 'update') {
-        console.log('ChatGPT Message Logger Extension updated');
+        console.log('Sequoia AI Message Logger Extension updated');
     }
 });
 
 // Handle extension startup
 chrome.runtime.onStartup.addListener(() => {
-    console.log('ChatGPT Message Logger Extension started');
+    console.log('Sequoia AI Message Logger Extension started');
     serviceManager.startPeriodicHealthCheck();
 });
 
-// Handle tab updates to inject content script on ChatGPT pages
+// Handle tab updates to inject content script on AI service pages
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete' && tab.url) {
-        // Check if this is a ChatGPT page
-        if (tab.url.includes('chat.openai.com') || tab.url.includes('chatgpt.com')) {
-            console.log('ChatGPT page detected, ensuring content script is active');
+        // Check if this is a supported AI service page
+        const isChatGPT = tab.url.includes('chat.openai.com') || tab.url.includes('chatgpt.com');
+        const isClaude = tab.url.includes('claude.ai');
+        
+        if (isChatGPT || isClaude) {
+            const serviceName = isChatGPT ? 'ChatGPT' : 'Claude AI';
+            console.log(`${serviceName} page detected, ensuring content script is active`);
             
             // Inject content script if not already injected
             chrome.scripting.executeScript({
@@ -174,4 +178,4 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     }
 });
 
-console.log('ChatGPT Message Logger Extension background script loaded'); 
+console.log('Sequoia AI Message Logger Extension background script loaded'); 
