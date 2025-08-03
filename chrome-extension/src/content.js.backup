@@ -1,0 +1,253 @@
+// Content script for ChatGPT Compressor Extension
+// Intercepts fetch requests to ChatGPT and compresses user messages
+
+(function() {
+    'use strict';
+    console.log("🔧 ChatGPT Compressor Extension: Content script loaded!");
+    console.log("🔧 ChatGPT Compressor Extension: Looking for ChatGPT pages...");
+    
+    const COMPRESSION_SERVICE_URL = 'http://localhost:8002/compress';
+    const DEBUG = true;
+    
+    // ChatGPT API endpoints to monitor
+    const CHATGPT_ENDPOINTS = [
+        'backend-api',
+        'api.openai.com',
+        'chatgpt.com/api',
+        'chat.openai.com/api'
+    ];
+    
+    function log(...args) {
+        if (DEBUG) {
+            console.log('[ChatGPT Compressor]', ...args);
+        }
+    }
+    
+    function error(...args) {
+        console.error('[ChatGPT Compressor]', ...args);
+    }
+    
+    // Check if URL is a ChatGPT API endpoint
+    function isChatGPTEndpoint(url) {
+        return CHATGPT_ENDPOINTS.some(endpoint => url.includes(endpoint));
+    }
+    
+    // Find user messages in request body
+    function extractUserMessage(bodyData) {
+        try {
+            // Handle ChatGPT's message structure
+            if (bodyData.messages && Array.isArray(bodyData.messages)) {
+                // Find the last user message
+                for (let i = bodyData.messages.length - 1; i >= 0; i--) {
+                    const message = bodyData.messages[i];
+                    
+                    // Check if this is a user message
+                    if (message.author?.role === 'user' || message.role === 'user') {
+                        // Extract content based on structure
+                        let content = null;
+                        
+                        if (typeof message.content === 'string') {
+                            content = message.content;
+                        } else if (message.content?.parts && Array.isArray(message.content.parts)) {
+                            content = message.content.parts.join(' ');
+                        } else if (message.content?.content_type === 'text' && message.content?.parts) {
+                            content = message.content.parts.join(' ');
+                        }
+                        
+                        if (content && content.length > 10) {
+                            return {
+                                messageIndex: i,
+                                originalContent: content,
+                                message: message
+                            };
+                        }
+                    }
+                }
+            }
+            
+            return null;
+        } catch (e) {
+            error('Error extracting user message:', e);
+            return null;
+        }
+    }
+    
+    // Update message content in the request body
+    function updateMessageContent(message, newContent) {
+        try {
+            if (typeof message.content === 'string') {
+                message.content = newContent;
+            } else if (message.content?.parts && Array.isArray(message.content.parts)) {
+                message.content.parts = [newContent];
+            } else if (message.content?.content_type === 'text' && message.content?.parts) {
+                message.content.parts = [newContent];
+            }
+            return true;
+        } catch (e) {
+            error('Error updating message content:', e);
+            return false;
+        }
+    }
+    
+    // Compress text using the background script
+    async function compressText(text) {
+        try {
+            const result = await chrome.runtime.sendMessage({
+                action: 'compressText',
+                text: text
+            });
+            
+            if (result.error) {
+                throw new Error(result.error);
+            }
+            
+            return result;
+        } catch (err) {
+            error('Compression service error:', err);
+            return null;
+        }
+    }
+    
+    // Show compression notification
+    function showCompressionResult(result) {
+        // Only show if there's actual compression
+        if (!result || result.compression_ratio <= 0) return;
+        
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            font-family: system-ui, sans-serif;
+            font-size: 14px;
+            max-width: 300px;
+        `;
+        
+        notification.innerHTML = `
+            <div style="font-weight: 600; margin-bottom: 4px;">Message Compressed!</div>
+            <div style="font-size: 12px; opacity: 0.9;">
+                ${result.compression_ratio}% reduction<br>
+                Method: ${result.method}
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 3000);
+    }
+    
+    // Store original fetch
+    const originalFetch = window.fetch;
+    
+    // Intercept fetch requests
+    window.fetch = async function(url, options = {}) {
+        try {
+            // Check if this is a ChatGPT API call
+            if (typeof url === 'string' && isChatGPTEndpoint(url)) {
+                log('Intercepted ChatGPT API call:', url);
+                
+                // Only process POST requests with body
+                if (options.method === 'POST' && options.body) {
+                    let bodyData;
+                    
+                    try {
+                        bodyData = JSON.parse(options.body);
+                    } catch (e) {
+                        log('Could not parse request body as JSON');
+                        return originalFetch.call(this, url, options);
+                    }
+                    
+                    // Extract user message
+                    const userMessageData = extractUserMessage(bodyData);
+                    if (!userMessageData) {
+                        log('No user message found or too short');
+                        return originalFetch.call(this, url, options);
+                    }
+                    
+                    log('Found user message:', userMessageData.originalContent.substring(0, 100) + '...');
+                    
+                    // Compress the message
+                    const compressionResult = await compressText(userMessageData.originalContent);
+                    if (!compressionResult) {
+                        log('Compression failed, sending original message');
+                        return originalFetch.call(this, url, options);
+                    }
+                    
+                    // Update message if compression was beneficial
+                    if (compressionResult.compression_ratio > 0) {
+                        const updateSuccess = updateMessageContent(
+                            userMessageData.message, 
+                            compressionResult.compressed_text
+                        );
+                        
+                        if (updateSuccess) {
+                            // Update the request body
+                            options.body = JSON.stringify(bodyData);
+                            
+                            // Show notification
+                            showCompressionResult(compressionResult);
+                            
+                            log('Message compressed and updated in request');
+                            log('Original:', userMessageData.originalContent);
+                            log('Compressed:', compressionResult.compressed_text);
+                        } else {
+                            log('Failed to update message content');
+                        }
+                    } else {
+                        log('No compression benefit, keeping original message');
+                    }
+                }
+            }
+        } catch (err) {
+            error('Error in fetch interceptor:', err);
+        }
+        
+        // Call original fetch
+        return originalFetch.call(this, url, options);
+    };
+    
+    // Check if compression service is running
+    async function checkService() {
+        try {
+            const result = await chrome.runtime.sendMessage({
+                action: 'checkServiceHealth'
+            });
+            
+            if (result.status === 'healthy') {
+                log('Compression service is running ✓');
+                log('Library available:', result.library_loaded);
+            } else {
+                error('Compression service status:', result.status);
+                if (result.error) {
+                    error('Error:', result.error);
+                }
+            }
+        } catch (err) {
+            error('Could not check compression service status:', err);
+        }
+    }
+    
+    // Initialize
+    log('ChatGPT Message Compressor Extension loaded');
+    
+    // Check service status after page loads
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(checkService, 1000);
+        });
+    } else {
+        setTimeout(checkService, 1000);
+    }
+    
+})(); 

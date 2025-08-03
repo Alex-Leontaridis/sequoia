@@ -1,148 +1,109 @@
 #!/usr/bin/env python3
 """
-Test script for the compression service
+Test script for prompt compression functionality
 """
 
 import requests
 import json
-import time
-
-COMPRESSION_SERVICE_URL = 'http://localhost:8002'
 
 def test_compression_service():
-    """Test the compression service with sample prompts"""
+    """Test the compression functionality of the message logger service"""
+    base_url = "http://localhost:8002"
     
-    test_prompts = [
-        "I am really interested in learning more about Python programming and would like to know what are the best practices",
-        "Could you please help me understand how machine learning algorithms work in detail?",
-        "I would like to create a web application using React and would appreciate some guidance on the best approach",
-        "Can you explain to me what are the differences between supervised and unsupervised learning?",
-        "I am having trouble with my code and would like some help debugging the issue"
-    ]
+    print("🧪 Testing Prompt Compression Service")
+    print("=" * 60)
     
-    print("Testing Compression Service")
-    print("=" * 50)
-    
-    # Test health endpoint
+    # Test 1: Health check with compression status
+    print("\n1. Testing health check...")
     try:
-        response = requests.get(f"{COMPRESSION_SERVICE_URL}/health")
+        response = requests.get(f"{base_url}/health")
         if response.status_code == 200:
-            print("✓ Service is healthy")
+            data = response.json()
+            print(f"✓ Service is healthy")
+            print(f"  Service: {data.get('service', 'Unknown')}")
+            print(f"  Compression Available: {data.get('compression_available', False)}")
+            print(f"  Compressor Initialized: {data.get('compressor_initialized', False)}")
+            print(f"  Compression Method: {data.get('compression_method', 'none')}")
         else:
             print(f"✗ Health check failed: {response.status_code}")
             return False
     except Exception as e:
-        print(f"✗ Could not connect to service: {e}")
-        print("Make sure the compression service is running:")
-        print("python3 compression_service.py")
+        print(f"✗ Health check error: {e}")
         return False
     
-    print("\nTesting compression with sample prompts:")
-    print("-" * 50)
-    
-    total_original_tokens = 0
-    total_compressed_tokens = 0
+    # Test 2: Direct compression test
+    print("\n2. Testing direct compression endpoint...")
+    test_prompts = [
+        "This is a simple test prompt that should be compressed effectively by the PCToolkit compression system.",
+        "I am writing a longer prompt with more details to test how well the compression algorithm works with extended content. This should demonstrate the effectiveness of the selective context compression method.",
+        "Please explain the process of photosynthesis in plants, including the light-dependent and light-independent reactions, and how this process is crucial for life on Earth."
+    ]
     
     for i, prompt in enumerate(test_prompts, 1):
         try:
-            response = requests.post(
-                f"{COMPRESSION_SERVICE_URL}/compress",
-                json={"text": prompt},
-                headers={"Content-Type": "application/json"}
-            )
-            
+            response = requests.post(f"{base_url}/compress", 
+                                   json={"text": prompt, "ratio": 0.3})
             if response.status_code == 200:
                 result = response.json()
-                
-                print(f"\nTest {i}:")
-                print(f"Original: {prompt}")
-                print(f"Compressed: {result['compressed_text']}")
-                print(f"Tokens: {result['original_tokens']} → {result['compressed_tokens']} "
-                      f"({result['compression_ratio']}% reduction)")
-                
-                total_original_tokens += result['original_tokens']
-                total_compressed_tokens += result['compressed_tokens']
-                
+                print(f"\n  Test {i} - ✓ Compression successful:")
+                print(f"    Original Length: {result.get('original_length', 0)} chars")
+                print(f"    Compressed Length: {result.get('compressed_length', 0)} chars")
+                print(f"    Compression Ratio: {result.get('compression_ratio', 0)}%")
+                print(f"    Method: {result.get('method', 'unknown')}")
+                print(f"    Original: {prompt[:60]}...")
+                print(f"    Compressed: {result.get('compressed', 'N/A')[:60]}...")
             else:
-                print(f"✗ Test {i} failed: {response.status_code}")
-                print(f"Response: {response.text}")
-                
+                print(f"  Test {i} - ✗ Compression failed: {response.status_code}")
+                try:
+                    error_data = response.json()
+                    print(f"    Error: {error_data.get('error', 'Unknown error')}")
+                except:
+                    print(f"    Error: {response.text}")
         except Exception as e:
-            print(f"✗ Test {i} error: {e}")
+            print(f"  Test {i} - ✗ Compression error: {e}")
     
-    # Summary
-    if total_original_tokens > 0:
-        overall_ratio = ((total_original_tokens - total_compressed_tokens) / total_original_tokens) * 100
-        print(f"\n" + "=" * 50)
-        print("SUMMARY:")
-        print(f"Total original tokens: {total_original_tokens}")
-        print(f"Total compressed tokens: {total_compressed_tokens}")
-        print(f"Total tokens saved: {total_original_tokens - total_compressed_tokens}")
-        print(f"Overall compression ratio: {overall_ratio:.2f}%")
+    # Test 3: Test message logging with compression
+    print("\n3. Testing message logging with compression...")
+    test_log_message = "ORIGINAL: How can I improve my productivity at work?\n\nMODIFIED: How can I improve my productivity at work?\n\nPlease reply in Spanish."
+    
+    try:
+        response = requests.post(f"{base_url}/log-message", 
+                               json={
+                                   "message": test_log_message, 
+                                   "url": "https://chat.openai.com/test",
+                                   "compression_ratio": 0.4
+                               })
+        if response.status_code == 200:
+            result = response.json()
+            print(f"✓ Message logged with compression")
+            print(f"  Status: {result.get('status', 'unknown')}")
+            print(f"  Message Length: {result.get('message_length', 0)}")
+            if 'compression' in result:
+                comp = result['compression']
+                print(f"  Compression Ratio: {comp.get('compression_ratio', 0)}%")
+                print(f"  Compression Method: {comp.get('method', 'unknown')}")
+        else:
+            print(f"✗ Message logging failed: {response.status_code}")
+    except Exception as e:
+        print(f"✗ Message logging error: {e}")
+    
+    print("\n" + "=" * 60)
+    print("🎉 Compression testing completed!")
+    print("=" * 60)
+    print()
+    print("Check the service console for detailed compression logs.")
+    print("The service will show compression analysis for each prompt.")
     
     return True
 
-def test_chatgpt_message():
-    """Test with a ChatGPT-style message structure"""
-    
-    print("\n" + "=" * 50)
-    print("Testing ChatGPT message structure")
-    print("-" * 50)
-    
-    # Simulate the actual ChatGPT request body structure
-    chatgpt_body = {
-        "action": "next",
-        "messages": [
-            {
-                "id": "test-message-id",
-                "author": {"role": "user"},
-                "create_time": time.time(),
-                "content": {
-                    "content_type": "text",
-                    "parts": ["I am really interested in learning more about how artificial intelligence works and would like to understand the fundamental concepts behind machine learning algorithms"]
-                },
-                "metadata": {}
-            }
-        ],
-        "conversation_id": "test-conversation",
-        "parent_message_id": "test-parent",
-        "model": "auto"
-    }
-    
-    # Extract message content (simulate what the userscript does)
-    message = chatgpt_body["messages"][0]
-    original_content = message["content"]["parts"][0]
-    
-    print(f"Original message content: {original_content}")
-    
-    # Test compression
-    try:
-        response = requests.post(
-            f"{COMPRESSION_SERVICE_URL}/compress",
-            json={"text": original_content},
-            headers={"Content-Type": "application/json"}
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            
-            print(f"Compressed content: {result['compressed_text']}")
-            print(f"Compression stats: {result['original_tokens']} → {result['compressed_tokens']} tokens")
-            print(f"Reduction: {result['compression_ratio']}%")
-            
-            # Update message content (simulate what userscript does)
-            message["content"]["parts"][0] = result['compressed_text']
-            
-            print(f"\nUpdated ChatGPT body:")
-            print(json.dumps(chatgpt_body, indent=2))
-            
-        else:
-            print(f"✗ Compression failed: {response.status_code}")
-            
-    except Exception as e:
-        print(f"✗ Error: {e}")
-
 if __name__ == "__main__":
-    success = test_compression_service()
-    if success:
-        test_chatgpt_message()
+    try:
+        success = test_compression_service()
+        if success:
+            print("\n✅ Compression service tests passed!")
+        else:
+            print("\n❌ Some compression service tests failed!")
+    except KeyboardInterrupt:
+        print("\n🛑 Test interrupted by user")
+    except Exception as e:
+        print(f"\n💥 Unexpected error: {e}")

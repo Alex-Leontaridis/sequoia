@@ -2,3 +2,10 @@ flask
 flask-cors
 requests
 tiktoken
+
+# PCToolkit dependencies for prompt compression
+torch
+transformers
+datasets
+accelerate
+sentencepiece

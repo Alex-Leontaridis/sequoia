@@ -1,6 +1,6 @@
-# ChatGPT Message Compressor - Basic Backend
+# ChatGPT Message Logger - Simple Backend
 
-A simple backend that intercepts ChatGPT requests and compresses user messages using the [prompt_compressor](https://github.com/metawake/prompt_compressor) library to reduce token usage.
+A simple backend that intercepts ChatGPT requests and logs user messages for analysis and monitoring.
 
 ## Quick Start
 
@@ -9,194 +9,210 @@ A simple backend that intercepts ChatGPT requests and compresses user messages u
 ```bash
 # Install Python dependencies
 pip3 install -r requirements.txt
-
-# Clone and install the prompt_compressor library
-git clone https://github.com/metawake/prompt_compressor.git
-cd prompt_compressor
-pip3 install -e .
-cd ..
 ```
 
-This will:
-- Install Flask, Flask-CORS, and other dependencies
-- Clone the prompt_compressor library from GitHub
-- Install the prompt_compressor library
+This will install Flask, Flask-CORS, and other dependencies needed for the message logger service.
 
-### 2. Start the Compression Service
+### 2. Start the Message Logger Service
 
 ```bash
-python3 improved_compression_service.py
+python3 start_simple_backend.py
+```
+
+Or start the service directly:
+
+```bash
+python3 message_logger_service.py
 ```
 
 You should see:
 ```
-✓ prompt_compressor library loaded successfully
-Starting ChatGPT Compression Service on http://localhost:8002
-Library available: True
+🚀 Starting ChatGPT Message Logger Service...
+📡 Service will run on http://localhost:8002
 ```
 
 ### 3. Test the Backend
 
 ```bash
-python3 test_compression.py
+python3 test_simple_backend.py
 ```
 
-This will test the compression service and show example compressions.
+This will test the message logger service and verify it's working correctly.
 
-### 4. Use with ChatGPT
+### 4. Use with Chrome Extension
 
-1. Open [https://chatgpt.com](https://chatgpt.com) in your browser
-2. Open browser console (F12)
-3. Copy and paste the entire contents of `chatgpt_interceptor.js` into the console
-4. Press Enter to run the script
-5. Start chatting - your messages will be automatically compressed!
+1. Load the `chrome-extension` folder as an unpacked extension in Chrome
+2. Open [https://chat.openai.com](https://chat.openai.com) in your browser
+3. Start chatting - your messages will be automatically logged!
+4. Look for blue notifications showing message logging
 
 ## How It Works
 
 ### Backend Components
 
-1. **`improved_compression_service.py`** - Advanced Flask service that compresses text using the prompt_compressor library
-2. **`chatgpt_interceptor.js`** - Browser script that intercepts fetch requests to ChatGPT
-3. **`start_service.py`** - Startup script that handles dependencies and service management
-4. **`test_compression.py`** - Comprehensive test suite for the compression service
+1. **`message_logger_service.py`** - Simple Flask service that logs messages
+2. **`chrome-extension/src/content.js`** - Content script that intercepts fetch requests to ChatGPT
+3. **`chrome-extension/src/background.js`** - Background script that manages the extension
+4. **`start_simple_backend.py`** - Startup script that handles dependencies and service management
+5. **`test_simple_backend.py`** - Test suite for the message logger service
 
 ### Request Flow
 
 1. You type a message in ChatGPT
-2. Browser script intercepts the fetch request
+2. Chrome extension intercepts the fetch request
 3. Extracts the user message from the request body
-4. Sends message to compression service (localhost:8002)
-5. Compression service compresses the message using prompt_compressor
-6. Browser script updates the request with compressed message
-7. Modified request is sent to ChatGPT
-8. Shows compression stats via notification
+4. Sends message to logger service (localhost:8002)
+5. Logger service stores the message with timestamp and URL
+6. Shows logging confirmation via notification
+7. Original request continues to ChatGPT unchanged
 
 ### Example
 
-**Original message:**
+**Message sent to ChatGPT:**
 ```
 I am really interested in learning more about Python programming and would like to know the best practices
 ```
 
-**Compressed message:**
+**Logged in service:**
+```json
+{
+  "timestamp": "2024-01-15T10:30:45.123456",
+  "message": "I am really interested in learning more about Python programming and would like to know the best practices",
+  "url": "https://chat.openai.com/c/abc123",
+  "length": 108
+}
 ```
-I'm interested in learning about Python programming and want to know the best practices
-```
-
-**Result:** 15% token reduction
 
 ## API Endpoints
 
-### POST /compress
-Compress a text message.
+### POST /log-message
+Log a message with metadata.
 
 **Request:**
 ```json
 {
-  "text": "Your message to compress"
+  "message": "Your message to log",
+  "url": "https://chat.openai.com/c/abc123"
 }
 ```
 
 **Response:**
 ```json
 {
-  "original_text": "I am really interested in learning more about...",
-  "compressed_text": "I'm interested in learning about...",
-  "compression_ratio": 15.5,
-  "method": "library"
+  "status": "success",
+  "message": "Message logged successfully",
+  "timestamp": "2024-01-15T10:30:45.123456",
+  "message_length": 108
+}
+```
+
+### GET /messages
+Get all logged messages and statistics.
+
+**Response:**
+```json
+{
+  "stats": {
+    "total_messages": 42,
+    "messages": [...],
+    "start_time": "2024-01-15T09:00:00.000000"
+  },
+  "recent_messages": [...]
 }
 ```
 
 ### GET /health
-Check service health and library availability.
+Check service health.
 
 **Response:**
 ```json
 {
   "status": "healthy",
-  "service": "chatgpt_compressor", 
-  "library_available": true
+  "service": "ChatGPT Message Logger",
+  "total_messages": 42
 }
 ```
 
-## Browser Script Usage
+### GET /
+Service information.
 
-### Option 1: Console (Quick Test)
-1. Open ChatGPT in browser
-2. Open console (F12)
-3. Paste contents of `chatgpt_interceptor.js`
-4. Press Enter
+**Response:**
+```json
+{
+  "service": "ChatGPT Message Logger",
+  "version": "1.0.0"
+}
+```
 
-### Option 2: Userscript (Permanent)
-1. Install Tampermonkey browser extension
-2. Create new script
-3. Paste contents of `chatgpt_interceptor.js`
-4. Save and enable
+## Chrome Extension
 
-### Option 3: Bookmarklet
-Create a bookmark with this JavaScript code:
-```javascript
-javascript:(function(){var script=document.createElement('script');script.src='data:text/javascript,'+encodeURIComponent('/* paste chatgpt_interceptor.js content here */');document.head.appendChild(script);})();
+The Chrome extension consists of:
+
+- **Content Script** (`src/content.js`): Intercepts ChatGPT API calls and logs messages
+- **Background Script** (`src/background.js`): Manages extension state and service communication
+- **Popup UI** (`pages/popup/`): Extension popup interface
+- **Options Page** (`pages/options/`): Extension settings
+
+### Installation
+
+1. Open Chrome and go to `chrome://extensions/`
+2. Enable "Developer mode"
+3. Click "Load unpacked"
+4. Select the `chrome-extension` folder
+5. The extension will be installed and active
+
+## Development
+
+### Running Tests
+
+```bash
+# Test the message logger service
+python3 test_simple_backend.py
+
+# Test the Chrome extension (if you have Node.js installed)
+cd chrome-extension
+npm test
+```
+
+### Service Management
+
+```bash
+# Start the service
+python3 start_simple_backend.py
+
+# Stop the service
+Ctrl+C
+
+# Check service health
+curl http://localhost:8002/health
+
+# View logged messages
+curl http://localhost:8002/messages
 ```
 
 ## Configuration
 
-### Enable/Disable Debug Logging
-In `chatgpt_interceptor.js`, change:
-```javascript
-const DEBUG = false; // Set to false to disable logging
-```
-
-### Change Service Port
-In `improved_compression_service.py`, change:
-```python
-app.run(host='0.0.0.0', port=8002)  # Change port here
-```
-
-Don't forget to update the URL in `chatgpt_interceptor.js`:
-```javascript
-const COMPRESSION_SERVICE_URL = 'http://localhost:8002/compress';
-```
+The service runs on `http://localhost:8002` by default. You can modify the port in `message_logger_service.py` if needed.
 
 ## Troubleshooting
 
 ### Service Won't Start
-- Check if port 8002 is already in use
-- Make sure Flask is installed: `pip3 install flask flask-cors`
-- Check if prompt_compressor library is installed properly
+- Check if port 8002 is available
+- Ensure all dependencies are installed: `pip3 install -r requirements.txt`
+- Check the service logs for error messages
 
-### Browser Script Not Working
-- Check browser console for errors
-- Verify the compression service is running (visit http://localhost:8002/health)
-- Make sure you're on chatgpt.com when running the script
+### Extension Not Working
+- Ensure the service is running on `http://localhost:8002`
+- Check browser console for error messages
+- Verify the extension is loaded in Chrome extensions page
+- Check that you're on a ChatGPT page (chat.openai.com)
 
-### No Compression Happening
-- Check if messages are long enough (minimum 10 characters)
-- Look for green notifications after sending messages
-- Check browser console for compression logs
-
-### Library Not Available
-If you see `library_available: false`, run:
-```bash
-cd prompt_compressor
-pip3 install -e .
-```
-
-## Files
-
-- `improved_compression_service.py` - Advanced compression service with multiple compression methods
-- `chatgpt_interceptor.js` - Browser interceptor script  
-- `start_service.py` - Startup and service management script
-- `test_compression.py` - Comprehensive test suite
-- `requirements.txt` - Python dependencies
-
-## Dependencies
-
-- Python 3.6+
-- Flask
-- Flask-CORS
-- [prompt_compressor](https://github.com/metawake/prompt_compressor) library
+### Messages Not Being Logged
+- Check if the service is running: `curl http://localhost:8002/health`
+- Look for notifications in the browser
+- Check browser console for network errors
+- Verify the content script is injected on ChatGPT pages
 
 ## License
 
-MIT License - see the prompt_compressor library for its licensing terms.
+This project is open source and available under the MIT License.
