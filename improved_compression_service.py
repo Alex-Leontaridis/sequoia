@@ -111,7 +111,23 @@ class AdvancedPromptCompressor:
             "I have": "I've",
             "you have": "you've",
             "we have": "we've",
-            "they have": "they've"
+            "they have": "they've",
+            "do not": "don't",
+            "does not": "doesn't",
+            "did not": "didn't",
+            "can not": "can't",
+            "cannot": "can't",
+            "will not": "won't",
+            "would not": "wouldn't",
+            "should not": "shouldn't",
+            "could not": "couldn't",
+            "have not": "haven't",
+            "has not": "hasn't",
+            "had not": "hadn't",
+            "is not": "isn't",
+            "are not": "aren't",
+            "was not": "wasn't",
+            "were not": "weren't"
         }
         
         # Politeness reduction rules
@@ -139,13 +155,164 @@ class AdvancedPromptCompressor:
             ("in order to", "to"),
             ("for the purpose of", "to"),
             ("with the goal of", "to"),
+            ("very detailed", "detailed"),
+            ("very important", "important"),
+            ("very interesting", "interesting"),
+            ("very helpful", "helpful"),
+            ("very useful", "useful"),
+            ("very good", "good"),
+            ("very bad", "bad"),
+            ("very large", "large"),
+            ("very small", "small"),
+            ("very long", "long"),
+            ("very short", "short"),
+            ("very fast", "fast"),
+            ("very slow", "slow"),
+            ("very easy", "easy"),
+            ("very difficult", "difficult"),
+            ("very simple", "simple"),
+            ("very complex", "complex"),
+            ("very clear", "clear"),
+            ("very obvious", "obvious"),
+            ("very basic", "basic"),
+            ("very advanced", "advanced"),
+            ("very specific", "specific"),
+            ("very general", "general"),
+            ("very accurate", "accurate"),
+            ("very precise", "precise"),
+            ("very exact", "exact"),
+            ("very similar", "similar"),
+            ("very different", "different"),
+            ("very common", "common"),
+            ("very rare", "rare"),
+            ("very popular", "popular"),
+            ("very famous", "famous"),
+            ("very successful", "successful"),
+            ("very effective", "effective"),
+            ("very efficient", "efficient"),
+            ("very powerful", "powerful"),
+            ("very strong", "strong"),
+            ("very weak", "weak"),
+            ("very high", "high"),
+            ("very low", "low"),
+            ("very big", "big"),
+            ("very little", "little"),
+            ("very much", "much"),
+            ("very many", "many"),
+            ("very few", "few"),
+            ("very often", "often"),
+            ("very rarely", "rarely"),
+            ("very quickly", "quickly"),
+            ("very slowly", "slowly"),
+            ("very carefully", "carefully"),
+            ("very easily", "easily"),
+            ("very well", "well"),
+            ("very badly", "badly"),
+            ("very nicely", "nicely"),
+            ("very beautifully", "beautifully"),
+            ("very perfectly", "perfectly"),
+            ("very completely", "completely"),
+            ("very totally", "totally"),
+            ("very absolutely", "absolutely"),
+            ("very definitely", "definitely"),
+            ("very certainly", "certainly"),
+            ("very surely", "surely"),
+            ("very probably", "probably"),
+            ("very possibly", "possibly"),
+            ("very maybe", "maybe"),
+            ("very perhaps", "perhaps"),
+            ("very usually", "usually"),
+            ("very normally", "normally"),
+            ("very typically", "typically"),
+            ("very generally", "generally"),
+            ("very usually", "usually"),
+            ("very commonly", "commonly"),
+            ("very frequently", "frequently"),
+            ("very regularly", "regularly"),
+            ("very constantly", "constantly"),
+            ("very continuously", "continuously"),
+            ("very always", "always"),
+            ("very never", "never"),
+            ("very sometimes", "sometimes"),
+            ("very occasionally", "occasionally"),
+            ("very rarely", "rarely"),
+            ("very seldom", "seldom"),
+            ("very hardly", "hardly"),
+            ("very barely", "barely"),
+            ("very scarcely", "scarcely"),
+            ("very almost", "almost"),
+            ("very nearly", "nearly"),
+            ("very approximately", "approximately"),
+            ("very roughly", "roughly"),
+            ("very about", "about"),
+            ("very around", "around"),
+            ("very close to", "close to"),
+            ("very near to", "near to"),
+            ("very far from", "far from"),
+            ("very away from", "away from"),
+            ("very inside", "inside"),
+            ("very outside", "outside"),
+            ("very within", "within"),
+            ("very without", "without"),
+            ("very above", "above"),
+            ("very below", "below"),
+            ("very under", "under"),
+            ("very over", "over"),
+            ("very on top of", "on top of"),
+            ("very in front of", "in front of"),
+            ("very behind", "behind"),
+            ("very next to", "next to"),
+            ("very beside", "beside"),
+            ("very between", "between"),
+            ("very among", "among"),
+            ("very through", "through"),
+            ("very across", "across"),
+            ("very along", "along"),
+            ("very around", "around"),
+            ("very throughout", "throughout"),
+            ("very during", "during"),
+            ("very while", "while"),
+            ("very when", "when"),
+            ("very where", "where"),
+            ("very why", "why"),
+            ("very how", "how"),
+            ("very what", "what"),
+            ("very which", "which"),
+            ("very who", "who"),
+            ("very whom", "whom"),
+            ("very whose", "whose"),
         ]
         
         # Filler word removal
         filler_words = [
             "basically", "actually", "literally", "obviously", 
             "clearly", "definitely", "certainly", "surely",
-            "of course", "naturally", "undoubtedly"
+            "of course", "naturally", "undoubtedly", "indeed",
+            "frankly", "honestly", "truthfully", "seriously"
+        ]
+        
+        # Additional compression rules for common phrases
+        additional_rules = [
+            ("artificial intelligence", "AI"),
+            ("machine learning", "ML"),
+            ("deep learning", "DL"),
+            ("neural networks", "neural nets"),
+            ("natural language processing", "NLP"),
+            ("computer vision", "CV"),
+            ("data science", "DS"),
+            ("big data", "large data"),
+            ("cloud computing", "cloud"),
+            ("internet of things", "IoT"),
+            ("virtual reality", "VR"),
+            ("augmented reality", "AR"),
+            ("blockchain technology", "blockchain"),
+            ("cryptocurrency", "crypto"),
+            ("user interface", "UI"),
+            ("user experience", "UX"),
+            ("application programming interface", "API"),
+            ("representational state transfer", "REST"),
+            ("graphical user interface", "GUI"),
+            ("command line interface", "CLI"),
         ]
         
         compressed = text
@@ -163,6 +330,11 @@ class AdvancedPromptCompressor:
         # Apply redundancy rules
         for redundant, concise in redundancy_rules:
             compressed = compressed.replace(redundant, concise)
+        
+        # Apply additional compression rules
+        for long_phrase, short_phrase in additional_rules:
+            compressed = compressed.replace(long_phrase, short_phrase)
+            compressed = compressed.replace(long_phrase.capitalize(), short_phrase.capitalize())
         
         # Remove filler words (but be careful not to change meaning)
         for filler in filler_words:
@@ -258,6 +430,57 @@ def compress_text():
     except Exception as e:
         logger.error(f"Error in compress endpoint: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/log-message', methods=['POST'])
+def log_message():
+    """Log message and return compression result - compatible with extension"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'message' not in data:
+            return jsonify({'error': 'Missing message field in request'}), 400
+        
+        message = data['message']
+        url = data.get('url', 'unknown')
+        
+        if not message or not message.strip():
+            return jsonify({'error': 'Empty message provided'}), 400
+        
+        # Log the message
+        logger.info(f"Message logged from {url}: {message[:100]}...")
+        
+        # Compress the message
+        compression_result = compressor.smart_compress(message)
+        
+        # Format response for extension
+        response = {
+            'compression': {
+                'success': True,
+                'original': compression_result['original_text'],
+                'compressed': compression_result['compressed_text'],
+                'original_length': len(compression_result['original_text']),
+                'compressed_length': len(compression_result['compressed_text']),
+                'compression_ratio': round((1 - len(compression_result['compressed_text']) / len(compression_result['original_text'])) * 100, 2),
+                'original_tokens': compression_result['original_tokens'],
+                'compressed_tokens': compression_result['compressed_tokens'],
+                'token_compression_ratio': compression_result['compression_ratio'],
+                'method': compression_result['method'],
+                'tiktoken_available': True
+            },
+            'logged': True,
+            'url': url
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Error in log-message endpoint: {e}")
+        return jsonify({
+            'compression': {
+                'success': False,
+                'error': str(e)
+            }
+        }), 500
 
 @app.route('/health', methods=['GET'])
 def health_check():

@@ -3,6 +3,91 @@
 const LOGGER_SERVICE_URL = 'http://localhost:8002';
 console.log("🔧 Sequoia AI Message Logger Extension: Background script loaded!");
 
+// Environmental impact constants
+const ENVIRONMENTAL_IMPACT = {
+  WATER_PER_TOKEN: 0.5, // 0.5 mL of water saved per token
+  CO2_PER_TOKEN: 0.04   // 0.04g of CO2 saved per token
+};
+
+// Storage keys
+const STORAGE_KEYS = {
+  CO2_SAVED: 'co2Saved',
+  WATER_SAVED: 'waterSaved',
+  IS_PAUSED: 'isPaused'
+};
+
+// Initialize storage with default values
+async function initializeStorage() {
+  try {
+    const result = await chrome.storage.local.get([
+      STORAGE_KEYS.CO2_SAVED,
+      STORAGE_KEYS.WATER_SAVED,
+      STORAGE_KEYS.IS_PAUSED
+    ]);
+
+    // Set default values if they don't exist
+    const updates = {};
+    
+    if (result[STORAGE_KEYS.CO2_SAVED] === undefined) {
+      updates[STORAGE_KEYS.CO2_SAVED] = 0;
+    }
+    
+    if (result[STORAGE_KEYS.WATER_SAVED] === undefined) {
+      updates[STORAGE_KEYS.WATER_SAVED] = 0;
+    }
+    
+    if (result[STORAGE_KEYS.IS_PAUSED] === undefined) {
+      updates[STORAGE_KEYS.IS_PAUSED] = false;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await chrome.storage.local.set(updates);
+      console.log('🔧 Sequoia: Storage initialized with default values:', updates);
+    }
+  } catch (error) {
+    console.error('🔧 Sequoia: Error initializing storage:', error);
+  }
+}
+
+// Update savings based on tokens saved from compression
+async function updateSavings(tokensSaved) {
+  if (!tokensSaved || tokensSaved <= 0) {
+    return;
+  }
+
+  try {
+    const result = await chrome.storage.local.get([
+      STORAGE_KEYS.CO2_SAVED,
+      STORAGE_KEYS.WATER_SAVED
+    ]);
+    
+    const currentCo2 = result[STORAGE_KEYS.CO2_SAVED] || 0;
+    const currentWater = result[STORAGE_KEYS.WATER_SAVED] || 0;
+    
+    const co2Increase = tokensSaved * ENVIRONMENTAL_IMPACT.CO2_PER_TOKEN;
+    const waterIncrease = tokensSaved * ENVIRONMENTAL_IMPACT.WATER_PER_TOKEN;
+    
+    const newCo2Saved = currentCo2 + co2Increase;
+    const newWaterSaved = currentWater + waterIncrease;
+    
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.CO2_SAVED]: newCo2Saved,
+      [STORAGE_KEYS.WATER_SAVED]: newWaterSaved
+    });
+
+    console.log(`🔧 Sequoia: Updated savings - CO2: +${co2Increase.toFixed(2)}g (${newCo2Saved.toFixed(2)}g total), Water: +${waterIncrease.toFixed(2)}mL (${newWaterSaved.toFixed(2)}mL total)`);
+  } catch (error) {
+    console.error('🔧 Sequoia: Error updating savings:', error);
+  }
+}
+
+// Initialize storage on startup
+initializeStorage().then(() => {
+    console.log("🔧 Sequoia: Storage initialized");
+}).catch(error => {
+    console.error("🔧 Sequoia: Failed to initialize storage:", error);
+});
+
 // Service management
 class MessageLoggerServiceManager {
     constructor() {
@@ -56,6 +141,18 @@ class MessageLoggerServiceManager {
             // Update stats
             this.stats.totalMessages++;
             this.stats.lastMessageTime = new Date().toISOString();
+
+            // Track environmental savings if compression was successful
+            if (result && result.compression && result.compression.success) {
+                const tokensSaved = result.compression.original_tokens - result.compression.compressed_tokens;
+                if (tokensSaved > 0) {
+                    try {
+                        await updateSavings(tokensSaved);
+                    } catch (error) {
+                        console.error('🔧 Sequoia: Failed to update savings:', error);
+                    }
+                }
+            }
 
             return result;
         } catch (error) {
@@ -161,15 +258,21 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         // Check if this is a supported AI service page
         const isChatGPT = tab.url.includes('chat.openai.com') || tab.url.includes('chatgpt.com');
         const isClaude = tab.url.includes('claude.ai');
+        const isGemini = tab.url.includes('gemini.google.com') || tab.url.includes('bard.google.com');
+        const isGrok = tab.url.includes('grok.com');
         
-        if (isChatGPT || isClaude) {
-            const serviceName = isChatGPT ? 'ChatGPT' : 'Claude AI';
+        if (isChatGPT || isClaude || isGemini || isGrok) {
+            let serviceName = 'Unknown AI Service';
+            if (isChatGPT) serviceName = 'ChatGPT';
+            else if (isClaude) serviceName = 'Claude AI';
+            else if (isGemini) serviceName = 'Gemini';
+            else if (isGrok) serviceName = 'Grok';
             console.log(`${serviceName} page detected, ensuring content script is active`);
             
             // Inject content script if not already injected
             chrome.scripting.executeScript({
                 target: { tabId: tabId },
-                files: ['src/content.js']
+                files: ['dist/content.js']
             }).catch(error => {
                 // Script might already be injected, which is fine
                 console.log('Content script injection result:', error);

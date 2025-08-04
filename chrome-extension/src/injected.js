@@ -1,4 +1,4 @@
-// Injected script that runs in the page world to intercept ChatGPT and Claude AI messages
+// Injected script that runs in the page world to intercept ChatGPT, Claude AI, and Gemini messages
 (function() {
     'use strict';
     
@@ -25,32 +25,79 @@
     ];
     
     const CLAUDE_ENDPOINTS = [
-        'claude.ai/api'
+        'claude.ai/api',
+        'claude.ai/sentry',
+        'claude.ai/organizations',
+        'claude.ai/messages',
+        'claude.ai/conversations'
+    ];
+    
+    const GEMINI_ENDPOINTS = [
+        'gemini.google.com',
+        'bard.google.com'
+    ];
+    
+    const GROK_ENDPOINTS = [
+        'grok.com/rest/app-chat',
+        'grok.com/api',
+        'grok.com/rest'
     ];
     
     function log(...args) {
         if (DEBUG) {
+            try {
             console.log('[AI Message Logger]', ...args);
+            } catch (e) {
+                // Fallback for CSP-restricted environments
+                console.log('[AI Message Logger]', args.map(arg => 
+                    typeof arg === 'string' ? arg : JSON.stringify(arg)
+                ).join(' '));
+            }
         }
     }
     
     function error(...args) {
+        try {
         console.error('[AI Message Logger]', ...args);
+        } catch (e) {
+            // Fallback for CSP-restricted environments
+            console.error('[AI Message Logger]', args.map(arg => 
+                typeof arg === 'string' ? arg : JSON.stringify(arg)
+            ).join(' '));
+        }
     }
     
     // Check if URL is a ChatGPT API endpoint
     function isChatGPTEndpoint(url) {
-        return CHATGPT_ENDPOINTS.some(endpoint => url.includes(endpoint));
+        // Handle both absolute and relative URLs
+        const fullUrl = url.startsWith('http') ? url : window.location.origin + url;
+        return CHATGPT_ENDPOINTS.some(endpoint => fullUrl.includes(endpoint));
     }
     
     // Check if URL is a Claude AI API endpoint
     function isClaudeEndpoint(url) {
-        return CLAUDE_ENDPOINTS.some(endpoint => url.includes(endpoint));
+        // Handle both absolute and relative URLs
+        const fullUrl = url.startsWith('http') ? url : window.location.origin + url;
+        return CLAUDE_ENDPOINTS.some(endpoint => fullUrl.includes(endpoint));
+    }
+    
+    // Check if URL is a Gemini API endpoint
+    function isGeminiEndpoint(url) {
+        // Handle both absolute and relative URLs
+        const fullUrl = url.startsWith('http') ? url : window.location.origin + url;
+        return GEMINI_ENDPOINTS.some(endpoint => fullUrl.includes(endpoint));
+    }
+    
+    // Check if URL is a Grok API endpoint
+    function isGrokEndpoint(url) {
+        // Handle both absolute and relative URLs
+        const fullUrl = url.startsWith('http') ? url : window.location.origin + url;
+        return GROK_ENDPOINTS.some(endpoint => fullUrl.includes(endpoint));
     }
     
     // Check if URL is any supported AI service endpoint
     function isAIServiceEndpoint(url) {
-        return isChatGPTEndpoint(url) || isClaudeEndpoint(url);
+        return isChatGPTEndpoint(url) || isClaudeEndpoint(url) || isGeminiEndpoint(url) || isGrokEndpoint(url);
     }
     
     // Find user messages in request body for ChatGPT
@@ -97,11 +144,60 @@
     // Find user prompt in Claude's request body
     function extractClaudeUserMessage(bodyData) {
         try {
-            // Handle Claude's prompt structure
+            // Handle Claude's prompt structure - multiple possible formats
             if (bodyData.prompt && typeof bodyData.prompt === 'string' && bodyData.prompt.length > 10) {
                 return {
                     type: 'claude',
                     originalContent: bodyData.prompt,
+                    bodyData: bodyData
+                };
+            }
+            
+            // Handle Claude's message structure
+            if (bodyData.messages && Array.isArray(bodyData.messages)) {
+                // Find the last user message
+                for (let i = bodyData.messages.length - 1; i >= 0; i--) {
+                    const message = bodyData.messages[i];
+                    
+                    // Check if this is a user message
+                    if (message.role === 'user' || message.type === 'user') {
+                        let content = null;
+                        
+                        if (typeof message.content === 'string') {
+                            content = message.content;
+                        } else if (message.content?.text) {
+                            content = message.content.text;
+                        } else if (message.content?.parts && Array.isArray(message.content.parts)) {
+                            content = message.content.parts.join(' ');
+                        }
+                        
+                        if (content && content.length > 10) {
+                            return {
+                                type: 'claude',
+                                originalContent: content,
+                                bodyData: bodyData,
+                                message: message,
+                                messageIndex: i
+                            };
+                        }
+                    }
+                }
+            }
+            
+            // Handle Claude's input structure
+            if (bodyData.input && typeof bodyData.input === 'string' && bodyData.input.length > 10) {
+                return {
+                    type: 'claude',
+                    originalContent: bodyData.input,
+                    bodyData: bodyData
+                };
+            }
+            
+            // Handle Claude's text structure
+            if (bodyData.text && typeof bodyData.text === 'string' && bodyData.text.length > 10) {
+                return {
+                    type: 'claude',
+                    originalContent: bodyData.text,
                     bodyData: bodyData
                 };
             }
@@ -113,12 +209,96 @@
         }
     }
     
-    // Extract user message from either ChatGPT or Claude request
+    // Find user message in Gemini's request body
+    function extractGeminiUserMessage(bodyData) {
+        try {
+            // Handle Gemini's form-encoded request structure
+            if (typeof bodyData === 'string') {
+                // Parse the form-encoded data
+                const params = new URLSearchParams(bodyData);
+                const fReq = params.get('f.req');
+                
+                if (fReq) {
+                    try {
+                        // Decode the URL-encoded JSON
+                        const decodedReq = decodeURIComponent(fReq);
+                        const parsedReq = JSON.parse(decodedReq);
+                        
+                        // Extract the user message from the parsed structure
+                        // The structure is: [null, "[[\"message\",0,null,null,null,null,0],[\"en\"],...]"]
+                        if (parsedReq && Array.isArray(parsedReq) && parsedReq.length >= 2) {
+                            // The message data is in the second element (index 1) as a string
+                            const messageDataString = parsedReq[1];
+                            
+                            if (typeof messageDataString === 'string') {
+                                try {
+                                    // Parse the nested JSON string
+                                    const messageData = JSON.parse(messageDataString);
+                                    
+                                    if (Array.isArray(messageData) && messageData.length > 0) {
+                                        const firstMessageArray = messageData[0];
+                                        if (Array.isArray(firstMessageArray) && firstMessageArray.length > 0) {
+                                            const userMessage = firstMessageArray[0];
+                                            
+                                            if (typeof userMessage === 'string' && userMessage.length > 10) {
+                                                return {
+                                                    type: 'gemini',
+                                                    originalContent: userMessage,
+                                                    bodyData: bodyData,
+                                                    parsedReq: parsedReq,
+                                                    messageData: messageData,
+                                                    messageIndex: 0
+                                                };
+                                            }
+                                        }
+                                    }
+                                } catch (parseError) {
+                                    error('Error parsing Gemini message data string:', parseError);
+                                }
+                            }
+                        }
+                    } catch (parseError) {
+                        error('Error parsing Gemini request data:', parseError);
+                    }
+                }
+            }
+            
+            return null;
+        } catch (e) {
+            error('Error extracting Gemini user message:', e);
+            return null;
+        }
+    }
+    
+    // Find user message in Grok's request body
+    function extractGrokUserMessage(bodyData) {
+        try {
+            // Handle Grok's request structure
+            if (bodyData.message && typeof bodyData.message === 'string' && bodyData.message.length > 10) {
+                return {
+                    type: 'grok',
+                    originalContent: bodyData.message,
+                    bodyData: bodyData
+                };
+            }
+            
+            return null;
+        } catch (e) {
+            error('Error extracting Grok user message:', e);
+            return null;
+        }
+    }
+    
+    // Extract user message from any supported AI service request
     function extractUserMessage(bodyData, url) {
         if (isChatGPTEndpoint(url)) {
             return extractChatGPTUserMessage(bodyData);
         } else if (isClaudeEndpoint(url)) {
             return extractClaudeUserMessage(bodyData);
+        } else if (isGeminiEndpoint(url)) {
+            return extractGeminiUserMessage(bodyData);
+        } else if (isGrokEndpoint(url)) {
+            return extractGrokUserMessage(bodyData);
         }
         return null;
     }
@@ -141,12 +321,88 @@
     }
     
     // Update prompt content in Claude request body
-    function updateClaudeMessageContent(bodyData, newContent) {
+    function updateClaudeMessageContent(userMessageData, newContent) {
         try {
-            bodyData.prompt = newContent;
+            // Update based on the structure we found
+            if (userMessageData.bodyData.prompt) {
+                userMessageData.bodyData.prompt = newContent;
+                return true;
+            } else if (userMessageData.message) {
+                // Update the message content
+                if (typeof userMessageData.message.content === 'string') {
+                    userMessageData.message.content = newContent;
+                } else if (userMessageData.message.content?.text) {
+                    userMessageData.message.content.text = newContent;
+                } else if (userMessageData.message.content?.parts && Array.isArray(userMessageData.message.content.parts)) {
+                    userMessageData.message.content.parts = [newContent];
+                }
+                return true;
+            } else if (userMessageData.bodyData.input) {
+                userMessageData.bodyData.input = newContent;
+                return true;
+            } else if (userMessageData.bodyData.text) {
+                userMessageData.bodyData.text = newContent;
             return true;
+            }
+            
+            return false;
         } catch (e) {
             error('Error updating Claude message content:', e);
+            return false;
+        }
+    }
+    
+    // Update message content in Gemini request body
+    function updateGeminiMessageContent(userMessageData, newContent) {
+        try {
+            // Update the message in the parsed request structure
+            if (userMessageData.parsedReq && Array.isArray(userMessageData.parsedReq) && 
+                userMessageData.parsedReq.length > 0 && userMessageData.messageData) {
+                
+                // Check if the first element exists and is an array with at least 2 elements
+                if (userMessageData.parsedReq[0] && Array.isArray(userMessageData.parsedReq[0]) && 
+                    userMessageData.parsedReq[0].length >= 2) {
+                    
+                    // Update the message in the nested messageData
+                    const firstMessageArray = userMessageData.messageData[0];
+                    if (Array.isArray(firstMessageArray) && firstMessageArray.length > 0) {
+                        firstMessageArray[0] = newContent;
+                        
+                        // Update the parsedReq with the modified messageData
+                        // The structure is: [["MkEWBc", "[[[message, null, null, 0]]]", null, "generic"]]
+                        userMessageData.parsedReq[0][1] = JSON.stringify(userMessageData.messageData);
+                    
+                        // Re-encode the request body
+                        const updatedReq = JSON.stringify(userMessageData.parsedReq);
+                        const encodedReq = encodeURIComponent(updatedReq);
+                        
+                        // Update the form-encoded body
+                        const params = new URLSearchParams(userMessageData.bodyData);
+                        params.set('f.req', encodedReq);
+                        
+                        // Return the updated form-encoded string
+                        return params.toString();
+                    }
+                }
+            }
+            return null;
+        } catch (e) {
+            error('Error updating Gemini message content:', e);
+            return null;
+        }
+    }
+    
+    // Update message content in Grok request body
+    function updateGrokMessageContent(userMessageData, newContent) {
+        try {
+            // Update the message field in Grok's request structure
+            if (userMessageData.bodyData.message) {
+                userMessageData.bodyData.message = newContent;
+                return true;
+            }
+            return false;
+        } catch (e) {
+            error('Error updating Grok message content:', e);
             return false;
         }
     }
@@ -156,7 +412,11 @@
         if (userMessageData.type === 'chatgpt') {
             return updateChatGPTMessageContent(userMessageData.message, newContent);
         } else if (userMessageData.type === 'claude') {
-            return updateClaudeMessageContent(userMessageData.bodyData, newContent);
+            return updateClaudeMessageContent(userMessageData, newContent);
+        } else if (userMessageData.type === 'gemini') {
+            return updateGeminiMessageContent(userMessageData, newContent);
+        } else if (userMessageData.type === 'grok') {
+            return updateGrokMessageContent(userMessageData, newContent);
         }
         return false;
     }
@@ -272,14 +532,19 @@
             max-width: 300px;
         `;
         
-        notification.innerHTML = `
-            <div style="font-weight: 600; margin-bottom: 4px;">
-                ${paused ? '⏸️ Compression Paused' : '▶️ Compression Resumed'}
-            </div>
-            <div style="font-size: 12px; opacity: 0.9;">
-                ${paused ? 'Messages will be sent without compression' : 'Messages will be compressed again'}
-            </div>
-        `;
+        // Create title element
+        const title = document.createElement('div');
+        title.style.cssText = 'font-weight: 600; margin-bottom: 4px;';
+        title.textContent = paused ? '⏸️ Compression Paused' : '▶️ Compression Resumed';
+        
+        // Create description element
+        const description = document.createElement('div');
+        description.style.cssText = 'font-size: 12px; opacity: 0.9;';
+        description.textContent = paused ? 'Messages will be sent without compression' : 'Messages will be compressed again';
+        
+        // Append elements safely
+        notification.appendChild(title);
+        notification.appendChild(description);
         
         document.body.appendChild(notification);
         
@@ -309,13 +574,19 @@
             max-width: 300px;
         `;
         
-        notification.innerHTML = `
-            <div style="font-weight: 600; margin-bottom: 4px;">Message Compressed!</div>
-            <div style="font-size: 12px; opacity: 0.9;">
-                Sent compressed version<br>
-                Length: ${original.length} → ${modified.length} chars
-            </div>
-        `;
+        // Create title element
+        const title = document.createElement('div');
+        title.style.cssText = 'font-weight: 600; margin-bottom: 4px;';
+        title.textContent = 'Message Compressed!';
+        
+        // Create description element
+        const description = document.createElement('div');
+        description.style.cssText = 'font-size: 12px; opacity: 0.9;';
+        description.textContent = `Sent compressed version\nLength: ${original.length} → ${modified.length} chars`;
+        
+        // Append elements safely
+        notification.appendChild(title);
+        notification.appendChild(description);
         
         document.body.appendChild(notification);
         
@@ -339,27 +610,78 @@
         }
     });
 
-    // Store original fetch
+    // Store original fetch and XMLHttpRequest
     const originalFetch = window.fetch;
+    const originalXHROpen = XMLHttpRequest.prototype.open;
+    const originalXHRSend = XMLHttpRequest.prototype.send;
     
     // Intercept fetch requests
     window.fetch = async function(url, options = {}) {
         try {
+            // Debug: Log all fetch requests to see what's happening
+            if (typeof url === 'string') {
+                log(`🔍 Fetch request to: ${url}`);
+                log(`🔍 Request method: ${options.method || 'GET'}`);
+                log(`🔍 Has body: ${!!options.body}`);
+            }
+            
             // Check if this is an AI service API call
             if (typeof url === 'string' && isAIServiceEndpoint(url)) {
-                const serviceName = isChatGPTEndpoint(url) ? 'ChatGPT' : 'Claude AI';
-                log(`Intercepted ${serviceName} API call:`, url);
+                let serviceName = 'Unknown AI Service';
+                if (isChatGPTEndpoint(url)) serviceName = 'ChatGPT';
+                else if (isClaudeEndpoint(url)) serviceName = 'Claude AI';
+                else if (isGeminiEndpoint(url)) serviceName = 'Gemini';
+                else if (isGrokEndpoint(url)) serviceName = 'Grok';
                 
-                // Only process POST requests with body that contain conversations/completions
-                if (options.method === 'POST' && options.body && 
-                    (url.includes('conversation') || url.includes('chat') || url.includes('completion'))) {
+                log(`🎯 Intercepted ${serviceName} API call:`, url);
+                
+                // Only process POST requests with body
+                if (options.method === 'POST' && options.body) {
+                    // For Claude, be more permissive since it might use different endpoint patterns
+                    const isClaudeRequest = isClaudeEndpoint(url);
+                    const isChatGPTRequest = isChatGPTEndpoint(url);
+                    const isGeminiRequest = isGeminiEndpoint(url);
+                    const isGrokRequest = isGrokEndpoint(url);
+                    
+                    // Check if this looks like a message/completion request
+                    const isMessageRequest = url.includes('conversation') || 
+                                           url.includes('chat') || 
+                                           url.includes('completion') || 
+                                           url.includes('StreamGenerate') || 
+                                           url.includes('assistant.lamda') ||
+                                           url.includes('messages') ||
+                                           url.includes('api') ||
+                                           url.includes('responses') ||
+                                           isClaudeRequest || // Be more permissive for Claude
+                                           isGeminiRequest || // Be more permissive for Gemini
+                                           isGrokRequest; // Be more permissive for Grok
+                    
+                    log(`🔍 Message request check: ${isMessageRequest} (URL: ${url})`);
+                    log(`🔍 isClaudeRequest: ${isClaudeRequest}, isGeminiRequest: ${isGeminiRequest}, isGrokRequest: ${isGrokRequest}`);
+                    
+                    if (!isMessageRequest) {
+                        log('❌ Not a message request, skipping');
+                        return originalFetch.call(this, url, options);
+                    }
+                    
+                    log('✅ This is a message request, proceeding...');
                     
                     let bodyData;
                     
                     try {
+                        // Handle different content types
+                        if (typeof options.body === 'string') {
+                            // For Gemini, the body is form-encoded
+                            if (isGeminiEndpoint(url)) {
+                                bodyData = options.body;
+                            } else {
                         bodyData = JSON.parse(options.body);
+                            }
+                        } else {
+                            bodyData = options.body;
+                        }
                     } catch (e) {
-                        log('Could not parse request body as JSON');
+                        log('Could not parse request body');
                         return originalFetch.call(this, url, options);
                     }
                     
@@ -383,11 +705,16 @@
                     const compressedContent = await getCompressedMessage(userMessageData.originalContent);
                     
                     // Update the message in the request body with compressed version
-                    const updateSuccess = updateMessageContent(userMessageData, compressedContent);
+                    const updateResult = updateMessageContent(userMessageData, compressedContent);
                     
-                    if (updateSuccess && compressedContent !== userMessageData.originalContent) {
+                    if (updateResult && compressedContent !== userMessageData.originalContent) {
                         // Update the request body
+                        if (isGeminiEndpoint(url)) {
+                            // For Gemini, updateResult is the new form-encoded string
+                            options.body = updateResult;
+                        } else {
                         options.body = JSON.stringify(bodyData);
+                        }
                         
                         // Show notification
                         showModificationResult(userMessageData.originalContent, compressedContent);
@@ -411,6 +738,110 @@
         return originalFetch.call(this, url, options);
     };
     
-    log('AI Message Modifier loaded - will compress messages for ChatGPT and Claude AI');
+    // Intercept XMLHttpRequest
+    XMLHttpRequest.prototype.open = function(method, url, ...args) {
+        // Store the method and URL for later use
+        this._sequoiaMethod = method;
+        this._sequoiaUrl = url;
+        return originalXHROpen.call(this, method, url, ...args);
+    };
+    
+         XMLHttpRequest.prototype.send = async function(data) {
+        const url = this._sequoiaUrl;
+        const method = this._sequoiaMethod;
+        
+        // Debug: Log all XMLHttpRequest requests
+        if (typeof url === 'string') {
+            log(`🔍 XMLHttpRequest to: ${url}`);
+            log(`🔍 Request method: ${method}`);
+            log(`🔍 Has data: ${!!data}`);
+        }
+        
+                    // Check if this is an AI service API call
+            if (typeof url === 'string' && isAIServiceEndpoint(url)) {
+                let serviceName = 'Unknown AI Service';
+                if (isChatGPTEndpoint(url)) serviceName = 'ChatGPT';
+                else if (isClaudeEndpoint(url)) serviceName = 'Claude AI';
+                else if (isGeminiEndpoint(url)) serviceName = 'Gemini';
+                else if (isGrokEndpoint(url)) serviceName = 'Grok';
+                
+                log(`🎯 Intercepted ${serviceName} XMLHttpRequest:`, url);
+            
+            // Only process POST requests with data
+            if (method === 'POST' && data) {
+                // For Claude, be more permissive since it might use different endpoint patterns
+                const isClaudeRequest = isClaudeEndpoint(url);
+                const isChatGPTRequest = isChatGPTEndpoint(url);
+                const isGeminiRequest = isGeminiEndpoint(url);
+                const isGrokRequest = isGrokEndpoint(url);
+                
+                // Check if this looks like a message/completion request
+                const isMessageRequest = url.includes('conversation') || 
+                                       url.includes('chat') || 
+                                       url.includes('completion') || 
+                                       url.includes('StreamGenerate') || 
+                                       url.includes('assistant.lamda') ||
+                                       url.includes('messages') ||
+                                       url.includes('api') ||
+                                       url.includes('responses') ||
+                                       isClaudeRequest || // Be more permissive for Claude
+                                       isGeminiRequest || // Be more permissive for Gemini
+                                       isGrokRequest; // Be more permissive for Grok
+                
+                log(`🔍 XMLHttpRequest message check: ${isMessageRequest} (URL: ${url})`);
+                log(`🔍 isClaudeRequest: ${isClaudeRequest}, isGeminiRequest: ${isGeminiRequest}, isGrokRequest: ${isGrokRequest}`);
+                
+                                 if (isMessageRequest) {
+                     log('✅ This is a message XMLHttpRequest, proceeding...');
+                     
+                     // Process the request similar to fetch
+                     let bodyData;
+                     try {
+                         bodyData = typeof data === 'string' ? data : JSON.stringify(data);
+                     } catch (error) {
+                         log('Could not parse request body');
+                         return originalXHRSend.call(this, data);
+                     }
+                     
+                     // Extract user message
+                     const userMessage = extractUserMessage(bodyData, url);
+                     if (!userMessage) {
+                         log('No user message found or too short');
+                         return originalXHRSend.call(this, data);
+                     }
+                     
+                     log(`Found ${serviceName} user message:`, userMessage.originalContent.substring(0, 100) + '...');
+                     
+                     // Check if compression is paused
+                     if (isPaused) {
+                         log('⏸️ Compression is paused, sending original message');
+                         return originalXHRSend.call(this, data);
+                     }
+                     
+                     // Get compressed version
+                     log('🔄 Getting compressed version of message...');
+                     const compressedContent = await getCompressedMessage(userMessage.originalContent);
+                     
+                     // Update message content
+                     const updatedBody = updateMessageContent(userMessage, compressedContent);
+                     if (updatedBody && compressedContent !== userMessage.originalContent) {
+                         // Update the data with compressed content
+                         data = updatedBody;
+                         showModificationResult(userMessage.originalContent, compressedContent);
+                         log(`${serviceName} message compressed and sent successfully`);
+                         log('Original:', userMessage.originalContent);
+                         log('Compressed:', compressedContent);
+                         log('✅ Compression completed - check console group above');
+                     } else {
+                         log('No compression needed or failed to update message');
+                     }
+                 }
+            }
+        }
+        
+        return originalXHRSend.call(this, data);
+    };
+    
+    log('AI Message Modifier loaded - will compress messages for ChatGPT, Claude AI, Gemini, and Grok');
     
 })();

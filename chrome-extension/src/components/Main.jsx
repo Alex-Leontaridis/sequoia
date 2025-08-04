@@ -1,15 +1,80 @@
 import React, { useState, useEffect } from 'react';
 import './Main.css';
+import { getSavings, formatSavings, initializeStorage } from '../utils/storage.js';
 
 const Main = ({ onSettingsClick }) => {
   const [isPaused, setIsPaused] = useState(false);
+  const [savings, setSavings] = useState({ co2Saved: 0, waterSaved: 0 });
+  const [formattedSavings, setFormattedSavings] = useState({ 
+    co2Formatted: '0.0g', 
+    waterFormatted: '0.0mL',
+    co2Percentage: 0,
+    waterPercentage: 0
+  });
 
   useEffect(() => {
-    // Load pause state from storage
-    chrome.storage.local.get(['isPaused'], (result) => {
-      setIsPaused(result.isPaused || false);
-    });
+    // Initialize storage and load all data
+    const loadData = async () => {
+      try {
+        await initializeStorage();
+        
+        // Load pause state and savings
+        const [pauseResult, savingsData] = await Promise.all([
+          new Promise((resolve) => {
+            chrome.storage.local.get(['isPaused'], resolve);
+          }),
+          getSavings()
+        ]);
+        
+        // Set pause state
+        const pauseState = pauseResult.isPaused === true ? true : false;
+        setIsPaused(pauseState);
+        
+        // If the storage doesn't have the key set, initialize it to false
+        if (pauseResult.isPaused === undefined) {
+          chrome.storage.local.set({ isPaused: false });
+        }
+        
+        // Set savings data
+        setSavings(savingsData);
+        setFormattedSavings(formatSavings(savingsData.co2Saved, savingsData.waterSaved));
+        
+      } catch (error) {
+        console.error('🔧 Sequoia: Error loading data:', error);
+      }
+    };
+    
+    loadData();
   }, []);
+
+  // Listen for storage changes to update savings in real-time
+  useEffect(() => {
+    const handleStorageChange = (changes, area) => {
+      if (area === 'local') {
+        const co2Changed = changes.co2Saved;
+        const waterChanged = changes.waterSaved;
+        const pauseChanged = changes.isPaused;
+        
+        if (co2Changed || waterChanged) {
+          const newCo2 = co2Changed ? co2Changed.newValue : savings.co2Saved;
+          const newWater = waterChanged ? waterChanged.newValue : savings.waterSaved;
+          
+          setSavings({ co2Saved: newCo2, waterSaved: newWater });
+          setFormattedSavings(formatSavings(newCo2, newWater));
+        }
+        
+        if (pauseChanged) {
+          setIsPaused(pauseChanged.newValue);
+        }
+      }
+    };
+    
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, [savings.co2Saved, savings.waterSaved]);
 
   // Check if current tab is supported
   const [isSupportedPage, setIsSupportedPage] = useState(false);
@@ -19,7 +84,10 @@ const Main = ({ onSettingsClick }) => {
       if (tabs[0] && tabs[0].url) {
         const isSupported = tabs[0].url.includes('chat.openai.com') || 
                            tabs[0].url.includes('claude.ai') ||
-                           tabs[0].url.includes('chatgpt.com');
+                           tabs[0].url.includes('chatgpt.com') ||
+                           tabs[0].url.includes('grok.com') ||
+                           tabs[0].url.includes('gemini.google.com') ||
+                           tabs[0].url.includes('bard.google.com');
         setIsSupportedPage(isSupported);
       }
     });
@@ -34,7 +102,7 @@ const Main = ({ onSettingsClick }) => {
     
     // Send message to content script and refresh the page
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0] && tabs[0].url && (tabs[0].url.includes('chat.openai.com') || tabs[0].url.includes('claude.ai') || tabs[0].url.includes('chatgpt.com'))) {
+      if (tabs[0] && tabs[0].url && (tabs[0].url.includes('chat.openai.com') || tabs[0].url.includes('claude.ai') || tabs[0].url.includes('chatgpt.com') || tabs[0].url.includes('grok.com') || tabs[0].url.includes('gemini.google.com') || tabs[0].url.includes('bard.google.com'))) {
         // Send pause toggle message
         chrome.tabs.sendMessage(tabs[0].id, { 
           type: 'PAUSE_TOGGLE', 
@@ -63,7 +131,7 @@ const Main = ({ onSettingsClick }) => {
               <div 
                 className={`pause-icon ${isPaused ? 'paused' : ''} ${!isSupportedPage ? 'disabled' : ''}`} 
                 onClick={isSupportedPage ? handlePauseToggle : undefined} 
-                title={!isSupportedPage ? 'Navigate to ChatGPT or Claude AI to use compression' : 
+                title={!isSupportedPage ? 'Navigate to a supported AI service (ChatGPT, Claude, Gemini, or Grok) to use compression' : 
                        (isPaused ? 'Resume compression (will refresh page)' : 'Pause compression (will refresh page)')}
               >
                 {isPaused ? (
@@ -116,9 +184,12 @@ const Main = ({ onSettingsClick }) => {
                 <div className="icon-dot"></div>
               </div>
               <div className="progress-info">
-                <div className="progress-text-card">30% CO2 Saved</div>
+                <div className="progress-text-card">{formattedSavings.co2Formatted} CO2 Saved</div>
                 <div className="progress-bar">
-                  <div className="progress-fill-bar co2-fill"></div>
+                  <div 
+                    className="progress-fill-bar co2-fill" 
+                    style={{ width: `${formattedSavings.co2Percentage}%` }}
+                  ></div>
                 </div>
               </div>
             </div>
@@ -129,9 +200,12 @@ const Main = ({ onSettingsClick }) => {
                 <div className="icon-dot"></div>
               </div>
               <div className="progress-info">
-                <div className="progress-text-card">30% Water Saved</div>
+                <div className="progress-text-card">{formattedSavings.waterFormatted} Water Saved</div>
                 <div className="progress-bar">
-                  <div className="progress-fill-bar water-fill"></div>
+                  <div 
+                    className="progress-fill-bar water-fill"
+                    style={{ width: `${formattedSavings.waterPercentage}%` }}
+                  ></div>
                 </div>
               </div>
             </div>

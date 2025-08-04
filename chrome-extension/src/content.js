@@ -15,7 +15,9 @@ if (window.sequoiaExtensionLoaded) {
         // Check if compression is paused
         try {
             chrome.storage.local.get(['isPaused'], (result) => {
-                if (result.isPaused) {
+                // Fix: Explicitly check if isPaused is true
+                // Default to false (not paused) if the value doesn't exist or is falsy
+                if (result.isPaused === true) {
                     // If paused, send back original message without compression
                     window.postMessage({
                         type: 'LOG_MESSAGE_RESPONSE',
@@ -44,58 +46,79 @@ if (window.sequoiaExtensionLoaded) {
                         return;
                     }
 
-                // Forward to background script with timeout protection
-                const messageTimeout = setTimeout(() => {
-                    console.log('🔧 Sequoia AI Message Logger Extension: Message timeout');
-                    window.postMessage({
-                        type: 'LOG_MESSAGE_RESPONSE',
-                        id: event.data.id,
-                        result: { error: 'Message timeout - extension may be reloading' }
-                    }, '*');
-                }, 5000); // 5 second timeout
-
-                chrome.runtime.sendMessage(
-                    { action: 'logMessage', message: event.data.message, url: event.data.url },
-                    (response) => {
-                        clearTimeout(messageTimeout);
-                        
-                        // Check for errors
-                        if (chrome.runtime.lastError) {
-                            console.log('🔧 Sequoia AI Message Logger Extension: Runtime error:', chrome.runtime.lastError);
-                            window.postMessage({
-                                type: 'LOG_MESSAGE_RESPONSE',
-                                id: event.data.id,
-                                result: { error: chrome.runtime.lastError.message }
-                            }, '*');
-                            return;
-                        }
-
-                        // Send response back to page world
+                    // Forward to background script with timeout protection
+                    const messageTimeout = setTimeout(() => {
+                        console.log('🔧 Sequoia AI Message Logger Extension: Message timeout');
                         window.postMessage({
                             type: 'LOG_MESSAGE_RESPONSE',
                             id: event.data.id,
-                            result: response
+                            result: { error: 'Message timeout - extension may be reloading' }
                         }, '*');
-                    }
-                );
-            } catch (error) {
-                console.log('🔧 Sequoia AI Message Logger Extension: Caught extension error:', error.message);
+                    }, 5000); // 5 second timeout
+
+                    chrome.runtime.sendMessage(
+                        { action: 'logMessage', message: event.data.message, url: event.data.url },
+                        (response) => {
+                            clearTimeout(messageTimeout);
+                            
+                            // Check for errors
+                            if (chrome.runtime.lastError) {
+                                console.log('🔧 Sequoia AI Message Logger Extension: Runtime error:', chrome.runtime.lastError);
+                                window.postMessage({
+                                    type: 'LOG_MESSAGE_RESPONSE',
+                                    id: event.data.id,
+                                    result: { error: chrome.runtime.lastError.message }
+                                }, '*');
+                                return;
+                            }
+
+                            // Send response back to page world
+                            window.postMessage({
+                                type: 'LOG_MESSAGE_RESPONSE',
+                                id: event.data.id,
+                                result: response
+                            }, '*');
+                        }
+                    );
+                } catch (error) {
+                    console.log('🔧 Sequoia AI Message Logger Extension: Caught extension error:', error.message);
+                    window.postMessage({
+                        type: 'LOG_MESSAGE_RESPONSE',
+                        id: event.data.id,
+                        result: { error: 'Extension context error: ' + error.message }
+                    }, '*');
+                }
+            });
+        } catch (error) {
+            console.log('🔧 Sequoia AI Message Logger Extension: Storage access error:', error.message);
+            // If we can't access storage, assume not paused and try to proceed
+            try {
+                if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+                    chrome.runtime.sendMessage(
+                        { action: 'logMessage', message: event.data.message, url: event.data.url },
+                        (response) => {
+                            window.postMessage({
+                                type: 'LOG_MESSAGE_RESPONSE',
+                                id: event.data.id,
+                                result: response
+                            }, '*');
+                        }
+                    );
+                } else {
+                    window.postMessage({
+                        type: 'LOG_MESSAGE_RESPONSE',
+                        id: event.data.id,
+                        result: { error: 'Extension context invalidated' }
+                    }, '*');
+                }
+            } catch (innerError) {
                 window.postMessage({
                     type: 'LOG_MESSAGE_RESPONSE',
                     id: event.data.id,
-                    result: { error: 'Extension context error: ' + error.message }
+                    result: { error: 'Storage access error: ' + error.message }
                 }, '*');
             }
-        });
-    } catch (error) {
-        console.log('🔧 Sequoia AI Message Logger Extension: Storage access error:', error.message);
-        // If we can't access storage, assume not paused and try to proceed
-        window.postMessage({
-            type: 'LOG_MESSAGE_RESPONSE',
-            id: event.data.id,
-            result: { error: 'Storage access error: ' + error.message }
-        }, '*');
-    }
+        }
 });
 
     // Listen for pause toggle messages from popup
@@ -148,8 +171,11 @@ if (window.sequoiaExtensionLoaded) {
     // Load initial pause state and notify injected script
     try {
         chrome.storage.local.get(['isPaused'], (result) => {
-            const initialPauseState = result.isPaused || false;
+            // Fix: Explicitly check if isPaused is undefined, null, or false
+            // Default to false (not paused) if the value doesn't exist or is falsy
+            const initialPauseState = result.isPaused === true ? true : false;
             console.log('🔧 Sequoia AI Message Logger Extension: Initial pause state:', initialPauseState);
+            console.log('🔧 Sequoia AI Message Logger Extension: Raw storage result:', result);
             
             // Notify injected script of initial pause state after a delay
             setTimeout(() => {

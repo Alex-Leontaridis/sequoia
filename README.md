@@ -1,6 +1,6 @@
-# ChatGPT Message Logger - Simple Backend
+# Sequoia - AI Message Compression Extension
 
-A simple backend that intercepts ChatGPT requests and logs user messages for analysis and monitoring.
+A Chrome extension that automatically compresses messages for ChatGPT, Claude AI, Gemini, and Grok AI to improve efficiency and reduce token usage.
 
 ## Quick Start
 
@@ -41,57 +41,70 @@ This will test the message logger service and verify it's working correctly.
 
 ### 4. Use with Chrome Extension
 
-1. Load the `chrome-extension` folder as an unpacked extension in Chrome
-2. Open [https://chat.openai.com](https://chat.openai.com) in your browser
-3. Start chatting - your messages will be automatically logged!
-4. Look for blue notifications showing message logging
+1. Build the extension: `cd chrome-extension && npm run build`
+2. Load the `chrome-extension/dist` folder as an unpacked extension in Chrome
+3. Open any supported AI service:
+   - [ChatGPT](https://chat.openai.com)
+   - [Claude AI](https://claude.ai)
+   - [Gemini](https://gemini.google.com)
+   - [Grok AI](https://grok.com)
+4. Start chatting - your messages will be automatically compressed!
+5. Look for green notifications showing compression results
 
 ## How It Works
 
 ### Backend Components
 
-1. **`message_logger_service.py`** - Simple Flask service that logs messages
-2. **`chrome-extension/src/content.js`** - Content script that intercepts fetch requests to ChatGPT
+1. **`message_logger_service.py`** - Flask service that compresses messages using AI
+2. **`chrome-extension/src/content.js`** - Content script that intercepts fetch requests to AI services
 3. **`chrome-extension/src/background.js`** - Background script that manages the extension
 4. **`start_simple_backend.py`** - Startup script that handles dependencies and service management
-5. **`test_simple_backend.py`** - Test suite for the message logger service
+5. **`test_simple_backend.py`** - Test suite for the compression service
 
 ### Request Flow
 
-1. You type a message in ChatGPT
+1. You type a message in any supported AI service (ChatGPT, Claude, Gemini, or Grok)
 2. Chrome extension intercepts the fetch request
 3. Extracts the user message from the request body
-4. Sends message to logger service (localhost:8002)
-5. Logger service stores the message with timestamp and URL
-6. Shows logging confirmation via notification
-7. Original request continues to ChatGPT unchanged
+4. Sends message to compression service (localhost:8002)
+5. Compression service returns a compressed version of the message
+6. Extension replaces the original message with the compressed version
+7. Shows compression results via notification
+8. Modified request continues to the AI service
 
 ### Example
 
-**Message sent to ChatGPT:**
+**Original message sent to AI service:**
 ```
-I am really interested in learning more about Python programming and would like to know the best practices
+I am really interested in learning more about Python programming and would like to know the best practices for writing clean, maintainable code that follows industry standards
 ```
 
-**Logged in service:**
+**Compressed message sent to AI service:**
+```
+I want to learn Python programming best practices for clean, maintainable code
+```
+
+**Compression results:**
 ```json
 {
-  "timestamp": "2024-01-15T10:30:45.123456",
-  "message": "I am really interested in learning more about Python programming and would like to know the best practices",
-  "url": "https://chat.openai.com/c/abc123",
-  "length": 108
+  "original_length": 156,
+  "compressed_length": 78,
+  "compression_ratio": "50%",
+  "original_tokens": 45,
+  "compressed_tokens": 22,
+  "token_compression_ratio": "51%"
 }
 ```
 
 ## API Endpoints
 
 ### POST /log-message
-Log a message with metadata.
+Compress a message using AI.
 
 **Request:**
 ```json
 {
-  "message": "Your message to log",
+  "message": "Your message to compress",
   "url": "https://chat.openai.com/c/abc123"
 }
 ```
@@ -99,22 +112,31 @@ Log a message with metadata.
 **Response:**
 ```json
 {
-  "status": "success",
-  "message": "Message logged successfully",
-  "timestamp": "2024-01-15T10:30:45.123456",
-  "message_length": 108
+  "compression": {
+    "success": true,
+    "original": "Your original message here",
+    "compressed": "Compressed version of your message",
+    "original_length": 156,
+    "compressed_length": 78,
+    "compression_ratio": "50%",
+    "original_tokens": 45,
+    "compressed_tokens": 22,
+    "token_compression_ratio": "51%",
+    "method": "AI compression"
+  }
 }
 ```
 
 ### GET /messages
-Get all logged messages and statistics.
+Get all compressed messages and statistics.
 
 **Response:**
 ```json
 {
   "stats": {
     "total_messages": 42,
-    "messages": [...],
+    "total_compression_savings": "2.3MB",
+    "average_compression_ratio": "45%",
     "start_time": "2024-01-15T09:00:00.000000"
   },
   "recent_messages": [...]
@@ -128,8 +150,9 @@ Check service health.
 ```json
 {
   "status": "healthy",
-  "service": "ChatGPT Message Logger",
-  "total_messages": 42
+  "service": "Sequoia AI Message Compression",
+  "total_messages": 42,
+  "compression_enabled": true
 }
 ```
 
@@ -139,8 +162,9 @@ Service information.
 **Response:**
 ```json
 {
-  "service": "ChatGPT Message Logger",
-  "version": "1.0.0"
+  "service": "Sequoia AI Message Compression",
+  "version": "1.0.0",
+  "supported_services": ["ChatGPT", "Claude AI", "Gemini", "Grok AI"]
 }
 ```
 
@@ -148,26 +172,38 @@ Service information.
 
 The Chrome extension consists of:
 
-- **Content Script** (`src/content.js`): Intercepts ChatGPT API calls and logs messages
+- **Content Script** (`src/content.js`): Intercepts AI service API calls and compresses messages
 - **Background Script** (`src/background.js`): Manages extension state and service communication
-- **Popup UI** (`pages/popup/`): Extension popup interface
-- **Options Page** (`pages/options/`): Extension settings
+- **Popup UI** (`pages/popup/`): Extension popup interface with compression stats
+- **Options Page** (`pages/options/`): Extension settings and configuration
+- **Injected Script** (`src/injected.js`): Core logic for intercepting and modifying requests
+
+### Supported AI Services
+
+- **ChatGPT** (chat.openai.com, chatgpt.com)
+- **Claude AI** (claude.ai)
+- **Gemini** (gemini.google.com, bard.google.com)
+- **Grok AI** (grok.com)
 
 ### Installation
 
-1. Open Chrome and go to `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select the `chrome-extension` folder
-5. The extension will be installed and active
+1. Build the extension: `cd chrome-extension && npm run build`
+2. Open Chrome and go to `chrome://extensions/`
+3. Enable "Developer mode"
+4. Click "Load unpacked"
+5. Select the `chrome-extension/dist` folder
+6. The extension will be installed and active
 
 ## Development
 
 ### Running Tests
 
 ```bash
-# Test the message logger service
+# Test the compression service
 python3 test_simple_backend.py
+
+# Test Grok integration
+node test_grok_integration.js
 
 # Test the Chrome extension (if you have Node.js installed)
 cd chrome-extension
@@ -177,7 +213,7 @@ npm test
 ### Service Management
 
 ```bash
-# Start the service
+# Start the compression service
 python3 start_simple_backend.py
 
 # Stop the service
@@ -186,13 +222,20 @@ Ctrl+C
 # Check service health
 curl http://localhost:8002/health
 
-# View logged messages
+# View compression statistics
 curl http://localhost:8002/messages
 ```
 
 ## Configuration
 
-The service runs on `http://localhost:8002` by default. You can modify the port in `message_logger_service.py` if needed.
+The compression service runs on `http://localhost:8002` by default. You can modify the port in `message_logger_service.py` if needed.
+
+## Integration Guides
+
+For detailed information about each AI service integration:
+
+- [Claude AI Integration Guide](chrome-extension/CLAUDE_INTEGRATION_GUIDE.md)
+- [Grok AI Integration Guide](chrome-extension/GROK_INTEGRATION_GUIDE.md)
 
 ## Troubleshooting
 
@@ -202,16 +245,16 @@ The service runs on `http://localhost:8002` by default. You can modify the port 
 - Check the service logs for error messages
 
 ### Extension Not Working
-- Ensure the service is running on `http://localhost:8002`
+- Ensure the compression service is running on `http://localhost:8002`
 - Check browser console for error messages
 - Verify the extension is loaded in Chrome extensions page
-- Check that you're on a ChatGPT page (chat.openai.com)
+- Check that you're on a supported AI service page (ChatGPT, Claude, Gemini, or Grok)
 
-### Messages Not Being Logged
-- Check if the service is running: `curl http://localhost:8002/health`
-- Look for notifications in the browser
+### Messages Not Being Compressed
+- Check if the compression service is running: `curl http://localhost:8002/health`
+- Look for compression notifications in the browser
 - Check browser console for network errors
-- Verify the content script is injected on ChatGPT pages
+- Verify the content script is injected on supported AI service pages
 
 ## License
 

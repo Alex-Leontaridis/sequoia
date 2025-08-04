@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Sequoia",
   "version": "1.0.0",
-  "description": "Automatically compresses ChatGPT and Claude AI messages for better efficiency",
+  "description": "Automatically compresses ChatGPT, Claude AI, Gemini, and Grok messages for better efficiency",
   "permissions": [
     "activeTab", "tabs",
     "storage",
@@ -15,6 +15,12 @@
     "https://*.chat.openai.com/*",
     "https://claude.ai/*",
     "https://*.claude.ai/*",
+    "https://gemini.google.com/*",
+    "https://*.gemini.google.com/*",
+    "https://bard.google.com/*",
+    "https://*.bard.google.com/*",
+    "https://grok.com/*",
+    "https://*.grok.com/*",
     "http://localhost:8002/*"
   ],
   "background": {
@@ -28,7 +34,13 @@
         "https://chat.openai.com/*",
         "https://*.chat.openai.com/*",
         "https://claude.ai/*",
-        "https://*.claude.ai/*"
+        "https://*.claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://*.gemini.google.com/*",
+        "https://bard.google.com/*",
+        "https://*.bard.google.com/*",
+        "https://grok.com/*",
+        "https://*.grok.com/*"
       ],
       "js": ["dist/content.js"],
       "run_at": "document_start"
@@ -52,7 +64,13 @@
         "https://chat.openai.com/*",
         "https://*.chat.openai.com/*",
         "https://claude.ai/*",
-        "https://*.claude.ai/*"
+        "https://*.claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://*.gemini.google.com/*",
+        "https://bard.google.com/*",
+        "https://*.bard.google.com/*",
+        "https://grok.com/*",
+        "https://*.grok.com/*"
       ]
     }
   ]
