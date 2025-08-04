@@ -98,16 +98,19 @@
 
 .slider-container {
   position: relative;
+  padding: 0 12px; /* Add padding to account for knob width and marker alignment */
 }
 
 /* Slider Track */
 .slider-track {
   position: relative;
-  width: 100%;
+  width: calc(100% - 24px); /* Reduce width to align with markers */
   height: 4px;
   background: #E5E7EB;
   border-radius: 2px;
   margin-bottom: 20px;
+  margin-left: 12px; /* Align with first marker */
+  margin-right: 12px; /* Align with last marker */
 }
 
 .slider-fill {
@@ -175,6 +178,8 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
+  width: 100%;
+  padding: 0 12px; /* Match slider container padding */
 }
 
 .marker {
@@ -197,4 +202,20 @@
   color: #6B7280;
   line-height: 14px;
   text-align: center;
+}
+
+.marker-label.clickable {
+  cursor: pointer;
+  transition: color 0.2s ease, font-weight 0.2s ease;
+  user-select: none;
+}
+
+.marker-label.clickable:hover {
+  color: #374151;
+  font-weight: 500;
+}
+
+.marker-label.clickable:active {
+  color: #16A34A;
+  font-weight: 600;
 } 

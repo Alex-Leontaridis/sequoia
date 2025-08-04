@@ -9,12 +9,28 @@ const ENVIRONMENTAL_IMPACT = {
   CO2_PER_TOKEN: 0.04   // 0.04g of CO2 saved per token
 };
 
+// Weekly goal ranges
+const WEEKLY_GOAL_RANGES = {
+  WATER: {
+    MIN: 3,    // 3L per week
+    MAX: 40,   // 40L per week
+    DEFAULT: 10 // 10L per week
+  },
+  CO2: {
+    MIN: 0.4,  // 0.4kg per week
+    MAX: 5,    // 5kg per week
+    DEFAULT: 1 // 1kg per week
+  }
+};
+
 // Storage keys
 const STORAGE_KEYS = {
   CO2_SAVED: 'co2Saved',
   WATER_SAVED: 'waterSaved',
   IS_PAUSED: 'isPaused',
-  WELCOME_COMPLETED: 'welcomeCompleted'
+  WELCOME_COMPLETED: 'welcomeCompleted',
+  WEEKLY_WATER_GOAL: 'weeklyWaterGoal',
+  WEEKLY_CO2_GOAL: 'weeklyCo2Goal'
 };
 
 // Initialize storage with default values
@@ -24,7 +40,9 @@ async function initializeStorage() {
       STORAGE_KEYS.CO2_SAVED,
       STORAGE_KEYS.WATER_SAVED,
       STORAGE_KEYS.IS_PAUSED,
-      STORAGE_KEYS.WELCOME_COMPLETED
+      STORAGE_KEYS.WELCOME_COMPLETED,
+      STORAGE_KEYS.WEEKLY_WATER_GOAL,
+      STORAGE_KEYS.WEEKLY_CO2_GOAL
     ]);
 
     // Set default values if they don't exist
@@ -44,6 +62,14 @@ async function initializeStorage() {
     
     if (result[STORAGE_KEYS.WELCOME_COMPLETED] === undefined) {
       updates[STORAGE_KEYS.WELCOME_COMPLETED] = false;
+    }
+
+    if (result[STORAGE_KEYS.WEEKLY_WATER_GOAL] === undefined) {
+      updates[STORAGE_KEYS.WEEKLY_WATER_GOAL] = WEEKLY_GOAL_RANGES.WATER.DEFAULT;
+    }
+
+    if (result[STORAGE_KEYS.WEEKLY_CO2_GOAL] === undefined) {
+      updates[STORAGE_KEYS.WEEKLY_CO2_GOAL] = WEEKLY_GOAL_RANGES.CO2.DEFAULT;
     }
 
     if (Object.keys(updates).length > 0) {

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Cloud, Droplets } from 'lucide-react';
 import './Main.css';
-import { getSavings, formatSavings, initializeStorage } from '../utils/storage.js';
+import { getSavings, formatSavings, initializeStorage, getWeeklyGoals } from '../utils/storage.js';
 
 const Main = ({ onSettingsClick }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [savings, setSavings] = useState({ co2Saved: 0, waterSaved: 0 });
+  const [weeklyGoals, setWeeklyGoals] = useState({ waterGoal: 10, co2Goal: 1 });
   const [formattedSavings, setFormattedSavings] = useState({ 
     co2Formatted: '0.0g', 
     waterFormatted: '0.0mL',
@@ -19,12 +20,13 @@ const Main = ({ onSettingsClick }) => {
       try {
         await initializeStorage();
         
-        // Load pause state and savings
-        const [pauseResult, savingsData] = await Promise.all([
+        // Load pause state, savings, and weekly goals
+        const [pauseResult, savingsData, goalsData] = await Promise.all([
           new Promise((resolve) => {
             chrome.storage.local.get(['isPaused'], resolve);
           }),
-          getSavings()
+          getSavings(),
+          getWeeklyGoals()
         ]);
         
         // Set pause state
@@ -38,7 +40,18 @@ const Main = ({ onSettingsClick }) => {
         
         // Set savings data
         setSavings(savingsData);
-        setFormattedSavings(formatSavings(savingsData.co2Saved, savingsData.waterSaved));
+        setWeeklyGoals(goalsData);
+        
+        // Calculate progress against weekly goals
+        const co2Percentage = Math.min(Math.round((savingsData.co2Saved / goalsData.co2Goal) * 100), 100);
+        const waterPercentage = Math.min(Math.round((savingsData.waterSaved / goalsData.waterGoal) * 100), 100);
+        
+        setFormattedSavings({
+          co2Formatted: `${savingsData.co2Saved.toFixed(1)}g`,
+          waterFormatted: `${savingsData.waterSaved.toFixed(1)}mL`,
+          co2Percentage: co2Percentage,
+          waterPercentage: waterPercentage
+        });
         
       } catch (error) {
         console.error('🔧 Sequoia: Error loading data:', error);
@@ -55,13 +68,28 @@ const Main = ({ onSettingsClick }) => {
         const co2Changed = changes.co2Saved;
         const waterChanged = changes.waterSaved;
         const pauseChanged = changes.isPaused;
+        const waterGoalChanged = changes.weeklyWaterGoal;
+        const co2GoalChanged = changes.weeklyCo2Goal;
         
-        if (co2Changed || waterChanged) {
+        if (co2Changed || waterChanged || waterGoalChanged || co2GoalChanged) {
           const newCo2 = co2Changed ? co2Changed.newValue : savings.co2Saved;
           const newWater = waterChanged ? waterChanged.newValue : savings.waterSaved;
+          const newWaterGoal = waterGoalChanged ? waterGoalChanged.newValue : weeklyGoals.waterGoal;
+          const newCo2Goal = co2GoalChanged ? co2GoalChanged.newValue : weeklyGoals.co2Goal;
           
           setSavings({ co2Saved: newCo2, waterSaved: newWater });
-          setFormattedSavings(formatSavings(newCo2, newWater));
+          setWeeklyGoals({ waterGoal: newWaterGoal, co2Goal: newCo2Goal });
+          
+          // Recalculate progress against updated goals
+          const co2Percentage = Math.min(Math.round((newCo2 / newCo2Goal) * 100), 100);
+          const waterPercentage = Math.min(Math.round((newWater / newWaterGoal) * 100), 100);
+          
+          setFormattedSavings({
+            co2Formatted: `${newCo2.toFixed(1)}g`,
+            waterFormatted: `${newWater.toFixed(1)}mL`,
+            co2Percentage: co2Percentage,
+            waterPercentage: waterPercentage
+          });
         }
         
         if (pauseChanged) {
@@ -75,7 +103,7 @@ const Main = ({ onSettingsClick }) => {
     return () => {
       chrome.storage.onChanged.removeListener(handleStorageChange);
     };
-  }, [savings.co2Saved, savings.waterSaved]);
+  }, [savings.co2Saved, savings.waterSaved, weeklyGoals.waterGoal, weeklyGoals.co2Goal]);
 
   // Check if current tab is supported
   const [isSupportedPage, setIsSupportedPage] = useState(false);
@@ -184,7 +212,7 @@ const Main = ({ onSettingsClick }) => {
                 <Cloud size={24} color="#16A34A" />
               </div>
               <div className="progress-info">
-                <div className="progress-text-card">{formattedSavings.co2Formatted} CO2 Saved</div>
+                <div className="progress-text-card">{formattedSavings.co2Formatted} / {Math.round(weeklyGoals.co2Goal * 10) / 10}kg CO2 Saved</div>
                 <div className="progress-bar">
                   <div 
                     className="progress-fill-bar co2-fill" 
@@ -199,7 +227,7 @@ const Main = ({ onSettingsClick }) => {
                 <Droplets size={24} color="#2563EB" />
               </div>
               <div className="progress-info">
-                <div className="progress-text-card">{formattedSavings.waterFormatted} Water Saved</div>
+                <div className="progress-text-card">{formattedSavings.waterFormatted} / {Math.round(weeklyGoals.waterGoal * 10) / 10}L Water Saved</div>
                 <div className="progress-bar">
                   <div 
                     className="progress-fill-bar water-fill"
