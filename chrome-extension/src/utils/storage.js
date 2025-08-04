@@ -10,7 +10,8 @@ const ENVIRONMENTAL_IMPACT = {
 const STORAGE_KEYS = {
   CO2_SAVED: 'co2Saved',
   WATER_SAVED: 'waterSaved',
-  IS_PAUSED: 'isPaused'
+  IS_PAUSED: 'isPaused',
+  WELCOME_COMPLETED: 'welcomeCompleted'
 };
 
 /**
@@ -21,7 +22,8 @@ export async function initializeStorage() {
     const result = await chrome.storage.local.get([
       STORAGE_KEYS.CO2_SAVED,
       STORAGE_KEYS.WATER_SAVED,
-      STORAGE_KEYS.IS_PAUSED
+      STORAGE_KEYS.IS_PAUSED,
+      STORAGE_KEYS.WELCOME_COMPLETED
     ]);
 
     // Set default values if they don't exist
@@ -38,6 +40,10 @@ export async function initializeStorage() {
     if (result[STORAGE_KEYS.IS_PAUSED] === undefined) {
       updates[STORAGE_KEYS.IS_PAUSED] = false;
     }
+    
+    if (result[STORAGE_KEYS.WELCOME_COMPLETED] === undefined) {
+      updates[STORAGE_KEYS.WELCOME_COMPLETED] = false;
+    }
 
     if (Object.keys(updates).length > 0) {
       await chrome.storage.local.set(updates);
@@ -47,14 +53,16 @@ export async function initializeStorage() {
     return {
       co2Saved: result[STORAGE_KEYS.CO2_SAVED] || 0,
       waterSaved: result[STORAGE_KEYS.WATER_SAVED] || 0,
-      isPaused: result[STORAGE_KEYS.IS_PAUSED] || false
+      isPaused: result[STORAGE_KEYS.IS_PAUSED] || false,
+      welcomeCompleted: result[STORAGE_KEYS.WELCOME_COMPLETED] || false
     };
   } catch (error) {
     console.error('🔧 Sequoia: Error initializing storage:', error);
     return {
       co2Saved: 0,
       waterSaved: 0,
-      isPaused: false
+      isPaused: false,
+      welcomeCompleted: false
     };
   }
 }
@@ -168,6 +176,31 @@ export function formatSavings(co2Saved, waterSaved) {
     co2Percentage: Math.min(Math.round((co2Saved / 100) * 100), 100), // Scale to 100g max
     waterPercentage: Math.min(Math.round((waterSaved / 1000) * 100), 100) // Scale to 1000mL max
   };
+}
+
+/**
+ * Check if welcome screens have been completed
+ */
+export async function isWelcomeCompleted() {
+  try {
+    const result = await chrome.storage.local.get([STORAGE_KEYS.WELCOME_COMPLETED]);
+    return result[STORAGE_KEYS.WELCOME_COMPLETED] || false;
+  } catch (error) {
+    console.error('🔧 Sequoia: Error checking welcome completion:', error);
+    return false;
+  }
+}
+
+/**
+ * Mark welcome screens as completed
+ */
+export async function markWelcomeCompleted() {
+  try {
+    await chrome.storage.local.set({ [STORAGE_KEYS.WELCOME_COMPLETED]: true });
+    console.log('🔧 Sequoia: Welcome screens marked as completed');
+  } catch (error) {
+    console.error('🔧 Sequoia: Error marking welcome as completed:', error);
+  }
 }
 
 export { ENVIRONMENTAL_IMPACT, STORAGE_KEYS }; 

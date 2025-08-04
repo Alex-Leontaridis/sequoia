@@ -13,7 +13,8 @@ const ENVIRONMENTAL_IMPACT = {
 const STORAGE_KEYS = {
   CO2_SAVED: 'co2Saved',
   WATER_SAVED: 'waterSaved',
-  IS_PAUSED: 'isPaused'
+  IS_PAUSED: 'isPaused',
+  WELCOME_COMPLETED: 'welcomeCompleted'
 };
 
 // Initialize storage with default values
@@ -22,7 +23,8 @@ async function initializeStorage() {
     const result = await chrome.storage.local.get([
       STORAGE_KEYS.CO2_SAVED,
       STORAGE_KEYS.WATER_SAVED,
-      STORAGE_KEYS.IS_PAUSED
+      STORAGE_KEYS.IS_PAUSED,
+      STORAGE_KEYS.WELCOME_COMPLETED
     ]);
 
     // Set default values if they don't exist
@@ -38,6 +40,10 @@ async function initializeStorage() {
     
     if (result[STORAGE_KEYS.IS_PAUSED] === undefined) {
       updates[STORAGE_KEYS.IS_PAUSED] = false;
+    }
+    
+    if (result[STORAGE_KEYS.WELCOME_COMPLETED] === undefined) {
+      updates[STORAGE_KEYS.WELCOME_COMPLETED] = false;
     }
 
     if (Object.keys(updates).length > 0) {

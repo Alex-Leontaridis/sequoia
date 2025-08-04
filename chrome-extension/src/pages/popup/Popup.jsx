@@ -5,18 +5,40 @@ import Welcome2 from '../../components/Welcome2';
 import Welcome3 from '../../components/Welcome3';
 import Main from '../../components/Main';
 import Settings from '../../components/Settings';
+import { isWelcomeCompleted, markWelcomeCompleted } from '../../utils/storage.js';
 import './Popup.css';
 
 const Popup = () => {
   const [currentPage, setCurrentPage] = useState('loading'); // 'loading', 'welcome', 'welcome2', 'welcome3', 'main', 'settings'
 
   useEffect(() => {
-    // Show welcome page after 3 seconds
-    const timer = setTimeout(() => {
-      setCurrentPage('welcome');
-    }, 3000);
+    const checkWelcomeStatus = async () => {
+      try {
+        const welcomeCompleted = await isWelcomeCompleted();
+        
+        if (welcomeCompleted) {
+          // User has already seen welcome screens, go directly to main
+          setCurrentPage('main');
+        } else {
+          // First time user, show welcome screens after loading
+          const timer = setTimeout(() => {
+            setCurrentPage('welcome');
+          }, 3000);
+          
+          return () => clearTimeout(timer);
+        }
+      } catch (error) {
+        console.error('🔧 Sequoia: Error checking welcome status:', error);
+        // Fallback to showing welcome screens
+        const timer = setTimeout(() => {
+          setCurrentPage('welcome');
+        }, 3000);
+        
+        return () => clearTimeout(timer);
+      }
+    };
 
-    return () => clearTimeout(timer);
+    checkWelcomeStatus();
   }, []);
 
   const handleWelcomeComplete = () => {
@@ -27,8 +49,15 @@ const Popup = () => {
     setCurrentPage('welcome3');
   };
 
-  const handleWelcome3Complete = () => {
-    setCurrentPage('main');
+  const handleWelcome3Complete = async () => {
+    try {
+      // Mark welcome as completed
+      await markWelcomeCompleted();
+      setCurrentPage('main');
+    } catch (error) {
+      console.error('🔧 Sequoia: Error marking welcome as completed:', error);
+      setCurrentPage('main');
+    }
   };
 
   const handleSettingsClick = () => {
