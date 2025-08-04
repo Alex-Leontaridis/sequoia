@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Cloud, Droplets } from 'lucide-react';
 import './Main.css';
 import { getSavings, formatSavings, initializeStorage } from '../utils/storage.js';
 
@@ -180,8 +181,7 @@ const Main = ({ onSettingsClick }) => {
           <div className="progress-cards">
             <div className="progress-card">
               <div className="progress-icon co2-icon">
-                <div className="icon-outline"></div>
-                <div className="icon-dot"></div>
+                <Cloud size={24} color="#16A34A" />
               </div>
               <div className="progress-info">
                 <div className="progress-text-card">{formattedSavings.co2Formatted} CO2 Saved</div>
@@ -196,8 +196,7 @@ const Main = ({ onSettingsClick }) => {
             
             <div className="progress-card">
               <div className="progress-icon water-icon">
-                <div className="icon-outline"></div>
-                <div className="icon-dot"></div>
+                <Droplets size={24} color="#2563EB" />
               </div>
               <div className="progress-info">
                 <div className="progress-text-card">{formattedSavings.waterFormatted} Water Saved</div>
