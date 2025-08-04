@@ -517,43 +517,135 @@
     // Show pause/resume notification
     function showPauseNotification(paused) {
         const notification = document.createElement('div');
+        
+        // Set colors based on pause state
+        const iconColor = paused ? '#EF4444' : '#66A865';
+        const borderColor = paused ? '#FEE2E2' : '#D1FAE5';
+        const title = paused ? 'Sequoia is on Pause' : 'Sequoia is Compressing';
+        const description = paused 
+            ? 'Using AI consciously helps reduce digital emissions. You\'ve used up today\'s prompts.'
+            : 'Your messages will be automatically compressed to reduce digital emissions and improve efficiency.';
+        
         notification.style.cssText = `
             position: fixed;
             top: 20px;
             right: 20px;
-            background: ${paused ? '#EF4444' : '#10b981'};
-            color: white;
-            padding: 12px 16px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            background: #FDF8F5;
+            color: #374151;
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid ${borderColor};
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             z-index: 10000;
-            font-family: system-ui, sans-serif;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             font-size: 14px;
-            max-width: 300px;
+            max-width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         `;
         
-        // Create title element
-        const title = document.createElement('div');
-        title.style.cssText = 'font-weight: 600; margin-bottom: 4px;';
-        title.textContent = paused ? '⏸️ Compression Paused' : '▶️ Compression Resumed';
+        // Create header with icon and close button
+        const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        `;
         
-        // Create description element
-        const description = document.createElement('div');
-        description.style.cssText = 'font-size: 12px; opacity: 0.9;';
-        description.textContent = paused ? 'Messages will be sent without compression' : 'Messages will be compressed again';
+        // Create icon
+        const icon = document.createElement('div');
+        icon.style.cssText = `
+            width: 24px;
+            height: 24px;
+            background: ${iconColor};
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            flex-shrink: 0;
+        `;
+        icon.textContent = paused ? '!' : '✓';
         
-        // Append elements safely
-        notification.appendChild(title);
-        notification.appendChild(description);
+        // Create close button
+        const closeButton = document.createElement('button');
+        closeButton.style.cssText = `
+            background: none;
+            border: none;
+            color: #6B7280;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        `;
+        closeButton.textContent = '×';
+        closeButton.onmouseover = () => {
+            closeButton.style.backgroundColor = '#F3F4F6';
+        };
+        closeButton.onmouseout = () => {
+            closeButton.style.backgroundColor = 'transparent';
+        };
+        closeButton.onclick = () => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        };
         
+        // Create content container
+        const content = document.createElement('div');
+        content.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+        `;
+        
+        // Create title
+        const titleElement = document.createElement('div');
+        titleElement.style.cssText = `
+            font-weight: 600;
+            font-size: 16px;
+            color: #111827;
+            line-height: 1.4;
+        `;
+        titleElement.textContent = title;
+        
+        // Create description
+        const descriptionElement = document.createElement('div');
+        descriptionElement.style.cssText = `
+            font-size: 14px;
+            color: #6B7280;
+            line-height: 1.5;
+        `;
+        descriptionElement.textContent = description;
+        
+        // Assemble the notification
+        content.appendChild(titleElement);
+        content.appendChild(descriptionElement);
+        
+        header.appendChild(icon);
+        header.appendChild(content);
+        header.appendChild(closeButton);
+        
+        notification.appendChild(header);
         document.body.appendChild(notification);
         
-        // Remove after 3 seconds
+        // Remove after 8 seconds (longer for this important notification)
         setTimeout(() => {
             if (notification.parentNode) {
                 notification.parentNode.removeChild(notification);
             }
-        }, 3000);
+        }, 8000);
     }
 
     // Show modification notification
