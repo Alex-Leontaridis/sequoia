@@ -5,25 +5,31 @@ import {
   setWeeklyGoals, 
   goalToSliderPercentage, 
   sliderPercentageToGoal,
-  WEEKLY_GOAL_RANGES 
+  WEEKLY_GOAL_RANGES,
+  getDailyLimit,
+  setDailyLimit,
+  dailyLimitToSliderPercentage,
+  sliderPercentageToDailyLimit,
+  DAILY_LIMIT_RANGES
 } from '../utils/storage.js';
 
 const Settings = ({ onBack }) => {
   const [sliderValues, setSliderValues] = useState({
     co2: 50, // Default to middle (50%)
     water: 50, // Default to middle (50%)
-    limit: 66
+    dailyLimit: 0
   });
 
   const [goalValues, setGoalValues] = useState({
     co2: WEEKLY_GOAL_RANGES.CO2.DEFAULT,
-    water: WEEKLY_GOAL_RANGES.WATER.DEFAULT
+    water: WEEKLY_GOAL_RANGES.WATER.DEFAULT,
+    dailyLimit: DAILY_LIMIT_RANGES.DEFAULT
   });
 
   const [isDragging, setIsDragging] = useState({
     co2: false,
     water: false,
-    limit: false
+    dailyLimit: false
   });
 
   const [activeSlider, setActiveSlider] = useState(null);
@@ -31,39 +37,46 @@ const Settings = ({ onBack }) => {
   const sliderRefs = {
     co2: useRef(null),
     water: useRef(null),
-    limit: useRef(null)
+    dailyLimit: useRef(null)
   };
 
-  // Load weekly goals on component mount
+  // Load weekly goals and daily limit on component mount
   useEffect(() => {
-    const loadWeeklyGoals = async () => {
+    const loadSettings = async () => {
       try {
-        const goals = await getWeeklyGoals();
+        const [goals, dailyLimitData] = await Promise.all([
+          getWeeklyGoals(),
+          getDailyLimit()
+        ]);
+        
         const co2Percentage = goalToSliderPercentage(goals.co2Goal, 'co2');
         const waterPercentage = goalToSliderPercentage(goals.waterGoal, 'water');
+        const dailyLimitPercentage = dailyLimitToSliderPercentage(dailyLimitData.dailyLimit);
         
         setSliderValues(prev => ({
           ...prev,
           co2: co2Percentage,
-          water: waterPercentage
+          water: waterPercentage,
+          dailyLimit: dailyLimitPercentage
         }));
         
         setGoalValues({
           co2: goals.co2Goal,
-          water: goals.waterGoal
+          water: goals.waterGoal,
+          dailyLimit: dailyLimitData.dailyLimit
         });
       } catch (error) {
-        console.error('Error loading weekly goals:', error);
+        console.error('Error loading settings:', error);
       }
     };
 
-    loadWeeklyGoals();
+    loadSettings();
   }, []);
 
   const handleMouseDown = (sliderType, e) => {
     e.preventDefault();
     setActiveSlider(sliderType);
-    setIsDragging(prev => ({ co2: false, water: false, limit: false, [sliderType]: true }));
+    setIsDragging(prev => ({ co2: false, water: false, dailyLimit: false, [sliderType]: true }));
     handleMouseMove(sliderType, e);
   };
 
@@ -79,10 +92,13 @@ const Settings = ({ onBack }) => {
     
     setSliderValues(prev => ({ ...prev, [sliderType]: percentage }));
     
-    // Update goal values for water and CO2 sliders
+    // Update goal values for water, CO2, and daily limit sliders
     if (sliderType === 'water' || sliderType === 'co2') {
       const goalValue = sliderPercentageToGoal(percentage, sliderType);
       setGoalValues(prev => ({ ...prev, [sliderType]: goalValue }));
+    } else if (sliderType === 'dailyLimit') {
+      const limitValue = sliderPercentageToDailyLimit(percentage);
+      setGoalValues(prev => ({ ...prev, [sliderType]: limitValue }));
     }
   };
 
@@ -96,7 +112,16 @@ const Settings = ({ onBack }) => {
       }
     }
     
-    setIsDragging({ co2: false, water: false, limit: false });
+    // Save daily limit when user finishes dragging
+    if (isDragging.dailyLimit) {
+      try {
+        await setDailyLimit(goalValues.dailyLimit);
+      } catch (error) {
+        console.error('Error saving daily limit:', error);
+      }
+    }
+    
+    setIsDragging({ co2: false, water: false, dailyLimit: false });
     setActiveSlider(null);
   };
 
@@ -104,14 +129,14 @@ const Settings = ({ onBack }) => {
     const handleGlobalMouseMove = (e) => {
       if (isDragging.co2) handleMouseMove('co2', e);
       if (isDragging.water) handleMouseMove('water', e);
-      if (isDragging.limit) handleMouseMove('limit', e);
+      if (isDragging.dailyLimit) handleMouseMove('dailyLimit', e);
     };
 
     const handleGlobalMouseUp = () => {
       handleMouseUp();
     };
 
-    if (isDragging.co2 || isDragging.water || isDragging.limit) {
+    if (isDragging.co2 || isDragging.water || isDragging.dailyLimit) {
       document.addEventListener('mousemove', handleGlobalMouseMove);
       document.addEventListener('mouseup', handleGlobalMouseUp);
       
@@ -127,13 +152,20 @@ const Settings = ({ onBack }) => {
       return `${value.toFixed(1)}L`;
     } else if (type === 'co2') {
       return `${value.toFixed(1)}kg`;
+    } else if (type === 'dailyLimit') {
+      return value === 0 ? 'No Limit' : `${value} messages`;
     }
     return Math.round(value);
   };
 
   const handleLabelClick = async (sliderType, value) => {
     // Convert the value to slider percentage
-    const percentage = goalToSliderPercentage(value, sliderType);
+    let percentage;
+    if (sliderType === 'dailyLimit') {
+      percentage = dailyLimitToSliderPercentage(value);
+    } else {
+      percentage = goalToSliderPercentage(value, sliderType);
+    }
     
     // Update slider values
     setSliderValues(prev => ({ ...prev, [sliderType]: percentage }));
@@ -145,9 +177,11 @@ const Settings = ({ onBack }) => {
         await setWeeklyGoals(value, goalValues.co2);
       } else if (sliderType === 'co2') {
         await setWeeklyGoals(goalValues.water, value);
+      } else if (sliderType === 'dailyLimit') {
+        await setDailyLimit(value);
       }
     } catch (error) {
-      console.error('Error saving weekly goals:', error);
+      console.error('Error saving settings:', error);
     }
   };
 
@@ -274,38 +308,53 @@ const Settings = ({ onBack }) => {
             </div>
           </div>
           
-          {/* Set Daily Limit Slider */}
+          {/* Daily Limit Slider */}
           <div className="slider-section">
-            <div className="slider-label">Set Daily Limit</div>
+            <div className="slider-label">Daily Message Limit</div>
             <div className="slider-container">
               <div 
-                className={`slider-track limit-track ${isDragging.limit ? 'dragging' : ''}`}
-                ref={sliderRefs.limit}
-                onMouseDown={(e) => handleMouseDown('limit', e)}
+                className={`slider-track daily-limit-track ${isDragging.dailyLimit ? 'dragging' : ''}`}
+                ref={sliderRefs.dailyLimit}
+                onMouseDown={(e) => handleMouseDown('dailyLimit', e)}
               >
                 <div 
-                  className="slider-fill limit-fill"
-                  style={{ width: `${sliderValues.limit}%` }}
+                  className="slider-fill daily-limit-fill"
+                  style={{ width: `${sliderValues.dailyLimit}%` }}
                 ></div>
                 <div 
                   className="slider-knob"
-                  style={{ left: `${sliderValues.limit}%` }}
+                  style={{ left: `${sliderValues.dailyLimit}%` }}
                 >
-                  <div className="slider-tooltip">{Math.round(sliderValues.limit)}</div>
+                  <div className="slider-tooltip">{formatGoalValue(goalValues.dailyLimit, 'dailyLimit')}</div>
                 </div>
               </div>
               <div className="slider-markers">
                 <div className="marker">
                   <div className="marker-line"></div>
-                  <div className="marker-label">Eco</div>
+                  <div 
+                    className="marker-label clickable"
+                    onClick={() => handleLabelClick('dailyLimit', 0)}
+                  >
+                    No Limit
+                  </div>
                 </div>
                 <div className="marker">
                   <div className="marker-line"></div>
-                  <div className="marker-label">Balanced</div>
+                  <div 
+                    className="marker-label clickable"
+                    onClick={() => handleLabelClick('dailyLimit', 25)}
+                  >
+                    25
+                  </div>
                 </div>
                 <div className="marker">
                   <div className="marker-line"></div>
-                  <div className="marker-label">Power</div>
+                  <div 
+                    className="marker-label clickable"
+                    onClick={() => handleLabelClick('dailyLimit', DAILY_LIMIT_RANGES.MAX)}
+                  >
+                    {DAILY_LIMIT_RANGES.MAX}
+                  </div>
                 </div>
               </div>
             </div>

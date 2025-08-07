@@ -458,6 +458,16 @@
                     
                     // Log compression results to browser console
                     const result = event.data.result;
+                    
+                    // Check for daily limit exceeded
+                    if (result && result.isExceeded) {
+                        console.warn('🌳 Daily limit exceeded:', result.dailyLimit, 'messages per day');
+                        console.log('🌳 Daily limit response:', result);
+                        showDailyLimitNotification();
+                        resolve(result);
+                        return;
+                    }
+                    
                     if (result && result.compression) {
                         const comp = result.compression;
                         
@@ -514,6 +524,198 @@
         });
     }
     
+    // Helper function to check daily limit via content script
+    async function checkDailyLimit() {
+        return new Promise((resolve) => {
+            const id = crypto.randomUUID();
+            
+            function responseHandler(event) {
+                if (event.source === window && 
+                    event.data?.type === 'DAILY_LIMIT_CHECK_RESPONSE' && 
+                    event.data.id === id) {
+                    window.removeEventListener('message', responseHandler);
+                    resolve(event.data.result);
+                }
+            }
+            
+            window.addEventListener('message', responseHandler);
+            
+            window.postMessage({
+                type: 'DAILY_LIMIT_CHECK_REQUEST',
+                id: id
+            }, '*');
+            
+            // Timeout after 2 seconds
+            setTimeout(() => {
+                window.removeEventListener('message', responseHandler);
+                log('⏰ Daily limit check timed out');
+                resolve({ dailyLimit: 0, dailyMessageCount: 0, isExceeded: false });
+            }, 2000);
+        });
+    }
+
+    // Helper function to increment daily message count via content script
+    async function incrementDailyMessageCount() {
+        return new Promise((resolve) => {
+            const id = crypto.randomUUID();
+            
+            function responseHandler(event) {
+                if (event.source === window && 
+                    event.data?.type === 'INCREMENT_DAILY_COUNT_RESPONSE' && 
+                    event.data.id === id) {
+                    window.removeEventListener('message', responseHandler);
+                    resolve(event.data.result);
+                }
+            }
+            
+            window.addEventListener('message', responseHandler);
+            
+            window.postMessage({
+                type: 'INCREMENT_DAILY_COUNT_REQUEST',
+                id: id
+            }, '*');
+            
+            // Timeout after 2 seconds
+            setTimeout(() => {
+                window.removeEventListener('message', responseHandler);
+                log('⏰ Increment daily count timed out');
+                resolve(0);
+            }, 2000);
+        });
+    }
+
+    // Show daily limit exceeded notification
+    function showDailyLimitNotification() {
+        const notification = document.createElement('div');
+        
+        // Set colors for daily limit notification
+        const iconColor = '#FF9800';
+        const borderColor = '#FEF3C7';
+        const title = 'Tree says: Take a break';
+        const description = 'Using AI consciously helps reduce digital emissions. You\'ve used up today\'s prompts.';
+        
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #FDF8F5;
+            color: #374151;
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid ${borderColor};
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 10000;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 14px;
+            max-width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        `;
+        
+        // Create header with icon and close button
+        const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        `;
+        
+        // Create icon
+        const icon = document.createElement('div');
+        icon.style.cssText = `
+            width: 24px;
+            height: 24px;
+            background: ${iconColor};
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            flex-shrink: 0;
+        `;
+        icon.textContent = '🌳';
+        
+        // Create close button
+        const closeButton = document.createElement('button');
+        closeButton.style.cssText = `
+            background: none;
+            border: none;
+            color: #6B7280;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        `;
+        closeButton.textContent = '×';
+        closeButton.onmouseover = () => {
+            closeButton.style.backgroundColor = '#F3F4F6';
+        };
+        closeButton.onmouseout = () => {
+            closeButton.style.backgroundColor = 'transparent';
+        };
+        closeButton.onclick = () => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        };
+        
+        // Create content container
+        const content = document.createElement('div');
+        content.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+        `;
+        
+        // Create title
+        const titleElement = document.createElement('div');
+        titleElement.style.cssText = `
+            font-weight: 600;
+            font-size: 16px;
+            color: #111827;
+            line-height: 1.4;
+        `;
+        titleElement.textContent = title;
+        
+        // Create description
+        const descriptionElement = document.createElement('div');
+        descriptionElement.style.cssText = `
+            font-size: 14px;
+            color: #6B7280;
+            line-height: 1.5;
+        `;
+        descriptionElement.textContent = description;
+        
+        // Assemble the notification
+        content.appendChild(titleElement);
+        content.appendChild(descriptionElement);
+        
+        header.appendChild(icon);
+        header.appendChild(content);
+        header.appendChild(closeButton);
+        
+        notification.appendChild(header);
+        document.body.appendChild(notification);
+        
+        // Remove after 10 seconds (longer for this important notification)
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 10000);
+    }
+
     // Show pause/resume notification
     function showPauseNotification(paused) {
         const notification = document.createElement('div');
@@ -786,6 +988,31 @@
                     
                     log(`Found ${serviceName} user message:`, userMessageData.originalContent.substring(0, 100) + '...');
                     
+                    // Check daily limit FIRST (before checking if paused)
+                    try {
+                        const limitCheck = await checkDailyLimit();
+                        const dailyLimit = limitCheck.dailyLimit || 0;
+                        const dailyMessageCount = limitCheck.dailyMessageCount || 0;
+                        const isExceeded = limitCheck.isExceeded || false;
+
+                        // Check if limit is exceeded
+                        log(`🔧 Checking daily limit - Count: ${dailyMessageCount}, Limit: ${dailyLimit}`);
+                        if (isExceeded) {
+                            log(`🚫 Daily limit exceeded! Count: ${dailyMessageCount}, Limit: ${dailyLimit}`);
+                            showDailyLimitNotification();
+                            return originalFetch.call(this, url, options); // Send original message without compression
+                        }
+
+                        // Increment the count for ALL messages (compressed or not)
+                        if (dailyLimit > 0) {
+                            await incrementDailyMessageCount();
+                            log(`🔧 Daily message count incremented (ALL messages counted)`);
+                        }
+                    } catch (error) {
+                        log('❌ Error checking daily limit:', error);
+                        // Continue with compression if there's an error
+                    }
+
                     // Check if compression is paused
                     if (isPaused) {
                         log('⏸️ Compression is paused, sending original message');
@@ -904,6 +1131,31 @@
                      
                      log(`Found ${serviceName} user message:`, userMessage.originalContent.substring(0, 100) + '...');
                      
+                     // Check daily limit FIRST (before checking if paused)
+                     try {
+                         const limitCheck = await checkDailyLimit();
+                         const dailyLimit = limitCheck.dailyLimit || 0;
+                         const dailyMessageCount = limitCheck.dailyMessageCount || 0;
+                         const isExceeded = limitCheck.isExceeded || false;
+
+                         // Check if limit is exceeded
+                         log(`🔧 Checking daily limit - Count: ${dailyMessageCount}, Limit: ${dailyLimit}`);
+                         if (isExceeded) {
+                             log(`🚫 Daily limit exceeded! Count: ${dailyMessageCount}, Limit: ${dailyLimit}`);
+                             showDailyLimitNotification();
+                             return originalXHRSend.call(this, data); // Send original message without compression
+                         }
+
+                         // Increment the count for ALL messages (compressed or not)
+                         if (dailyLimit > 0) {
+                             await incrementDailyMessageCount();
+                             log(`🔧 Daily message count incremented (ALL messages counted)`);
+                         }
+                     } catch (error) {
+                         log('❌ Error checking daily limit:', error);
+                         // Continue with compression if there's an error
+                     }
+
                      // Check if compression is paused
                      if (isPaused) {
                          log('⏸️ Compression is paused, sending original message');

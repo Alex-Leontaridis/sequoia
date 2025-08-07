@@ -138,6 +138,10 @@
   background: #DC2626;
 }
 
+.daily-limit-fill {
+  background: #FF9800;
+}
+
 /* Slider Knob */
 .slider-knob {
   position: absolute;

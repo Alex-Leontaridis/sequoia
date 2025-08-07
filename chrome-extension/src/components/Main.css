@@ -143,7 +143,6 @@
   width: 140px;
   height: 140px;
   border-radius: 50%;
-  background: conic-gradient(from 0deg, #198038 0deg 90deg, #E5E7EB 90deg 360deg);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -7,16 +7,28 @@ if (window.sequoiaExtensionLoaded) {
 } else {
     window.sequoiaExtensionLoaded = true;
     
-        // Extension context (isolated world) - bridge to background script
+    // Extension context (isolated world) - bridge to background script
     window.addEventListener('message', (event) => {
         if (event.source !== window) return;
+        
+        // Handle daily limit check request
+        if (event.data?.type === 'DAILY_LIMIT_CHECK_REQUEST') {
+            handleDailyLimitCheck(event.data.id);
+            return;
+        }
+        
+        // Handle increment daily count request
+        if (event.data?.type === 'INCREMENT_DAILY_COUNT_REQUEST') {
+            handleIncrementDailyCount(event.data.id);
+            return;
+        }
+        
         if (event.data?.type !== 'LOG_MESSAGE_REQUEST') return;
 
         // Check if compression is paused
         try {
             chrome.storage.local.get(['isPaused'], (result) => {
-                // Fix: Explicitly check if isPaused is true
-                // Default to false (not paused) if the value doesn't exist or is falsy
+                // Check if paused
                 if (result.isPaused === true) {
                     // If paused, send back original message without compression
                     window.postMessage({
@@ -119,7 +131,7 @@ if (window.sequoiaExtensionLoaded) {
                 }, '*');
             }
         }
-});
+    });
 
     // Listen for pause toggle messages from popup
     try {
@@ -232,6 +244,91 @@ if (window.sequoiaExtensionLoaded) {
 
     // Inject script with delay to allow extension to stabilize
     setTimeout(injectScript, 500);
+
+    // Handle daily limit check request
+    async function handleDailyLimitCheck(id) {
+        try {
+            const result = await chrome.storage.local.get(['dailyLimit', 'dailyMessageCount', 'lastResetDate']);
+            const dailyLimit = result.dailyLimit || 0;
+            let dailyMessageCount = result.dailyMessageCount || 0;
+            const lastResetDate = result.lastResetDate || new Date().toDateString();
+            const currentDate = new Date().toDateString();
+
+            // Reset count if it's a new day
+            if (lastResetDate !== currentDate) {
+                dailyMessageCount = 0;
+                await chrome.storage.local.set({
+                    dailyMessageCount: 0,
+                    lastResetDate: currentDate
+                });
+                console.log('🔧 Sequoia: Daily message count reset for new day');
+            }
+
+            // Check if limit is exceeded (0 means no limit)
+            const isExceeded = dailyLimit > 0 && dailyMessageCount >= dailyLimit;
+
+            window.postMessage({
+                type: 'DAILY_LIMIT_CHECK_RESPONSE',
+                id: id,
+                result: {
+                    dailyLimit,
+                    dailyMessageCount,
+                    isExceeded,
+                    lastResetDate: currentDate
+                }
+            }, '*');
+        } catch (error) {
+            console.error('🔧 Sequoia: Error handling daily limit check:', error);
+            window.postMessage({
+                type: 'DAILY_LIMIT_CHECK_RESPONSE',
+                id: id,
+                result: {
+                    dailyLimit: 0,
+                    dailyMessageCount: 0,
+                    isExceeded: false,
+                    lastResetDate: new Date().toDateString()
+                }
+            }, '*');
+        }
+    }
+
+    // Handle increment daily count request
+    async function handleIncrementDailyCount(id) {
+        try {
+            const result = await chrome.storage.local.get(['dailyMessageCount', 'lastResetDate']);
+            let dailyMessageCount = result.dailyMessageCount || 0;
+            const lastResetDate = result.lastResetDate || new Date().toDateString();
+            const currentDate = new Date().toDateString();
+
+            // Reset count if it's a new day
+            if (lastResetDate !== currentDate) {
+                dailyMessageCount = 0;
+            }
+
+            // Increment count
+            dailyMessageCount++;
+
+            await chrome.storage.local.set({
+                dailyMessageCount: dailyMessageCount,
+                lastResetDate: currentDate
+            });
+
+            console.log(`🔧 Sequoia: Daily message count incremented to ${dailyMessageCount}`);
+
+            window.postMessage({
+                type: 'INCREMENT_DAILY_COUNT_RESPONSE',
+                id: id,
+                result: dailyMessageCount
+            }, '*');
+        } catch (error) {
+            console.error('🔧 Sequoia: Error handling increment daily count:', error);
+            window.postMessage({
+                type: 'INCREMENT_DAILY_COUNT_RESPONSE',
+                id: id,
+                result: 0
+            }, '*');
+        }
+    }
 
     console.log('🔧 Sequoia AI Message Logger Extension: Content script bridge loaded!');
 }

@@ -13,6 +13,7 @@ const Main = ({ onSettingsClick }) => {
     co2Percentage: 0,
     waterPercentage: 0
   });
+  const [treeProgress, setTreeProgress] = useState(0);
 
   useEffect(() => {
     // Initialize storage and load all data
@@ -46,12 +47,17 @@ const Main = ({ onSettingsClick }) => {
         const co2Percentage = Math.min(Math.round((savingsData.co2Saved / goalsData.co2Goal) * 100), 100);
         const waterPercentage = Math.min(Math.round((savingsData.waterSaved / goalsData.waterGoal) * 100), 100);
         
+        // Calculate tree progress: 1 tree = 1kg CO2 saved
+        const treeProgressPercentage = Math.min(Math.round((savingsData.co2Saved / 1000) * 100), 100); // Convert grams to kg
+        
         setFormattedSavings({
           co2Formatted: `${savingsData.co2Saved.toFixed(1)}g`,
           waterFormatted: `${savingsData.waterSaved.toFixed(1)}mL`,
           co2Percentage: co2Percentage,
           waterPercentage: waterPercentage
         });
+        
+        setTreeProgress(treeProgressPercentage);
         
       } catch (error) {
         console.error('🔧 Sequoia: Error loading data:', error);
@@ -84,12 +90,17 @@ const Main = ({ onSettingsClick }) => {
           const co2Percentage = Math.min(Math.round((newCo2 / newCo2Goal) * 100), 100);
           const waterPercentage = Math.min(Math.round((newWater / newWaterGoal) * 100), 100);
           
+          // Calculate tree progress: 1 tree = 1kg CO2 saved
+          const treeProgressPercentage = Math.min(Math.round((newCo2 / 1000) * 100), 100); // Convert grams to kg
+          
           setFormattedSavings({
             co2Formatted: `${newCo2.toFixed(1)}g`,
             waterFormatted: `${newWater.toFixed(1)}mL`,
             co2Percentage: co2Percentage,
             waterPercentage: waterPercentage
           });
+          
+          setTreeProgress(treeProgressPercentage);
         }
         
         if (pauseChanged) {
@@ -97,13 +108,10 @@ const Main = ({ onSettingsClick }) => {
         }
       }
     };
-    
+
     chrome.storage.onChanged.addListener(handleStorageChange);
-    
-    return () => {
-      chrome.storage.onChanged.removeListener(handleStorageChange);
-    };
-  }, [savings.co2Saved, savings.waterSaved, weeklyGoals.waterGoal, weeklyGoals.co2Goal]);
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
+  }, [savings, weeklyGoals]);
 
   // Check if current tab is supported
   const [isSupportedPage, setIsSupportedPage] = useState(false);
@@ -189,7 +197,12 @@ const Main = ({ onSettingsClick }) => {
         {/* Content Section */}
         <div className="main-content">
           <div className="progress-container">
-            <div className="progress-ring">
+            <div 
+              className="progress-ring"
+              style={{
+                background: `conic-gradient(from 0deg, #198038 0deg ${treeProgress * 3.6}deg, #E5E7EB ${treeProgress * 3.6}deg 360deg)`
+              }}
+            >
               <div className="progress-fill"></div>
               <div className="tree-center">
                 <img src="assets/tree.png" alt="Tree" />
@@ -198,7 +211,7 @@ const Main = ({ onSettingsClick }) => {
           </div>
           
           <div className="progress-text">
-            <div className="progress-percentage">25% Towards Full Tree</div>
+            <div className="progress-percentage">{treeProgress}% Towards Full Tree</div>
           </div>
           
           <div className="main-tagline">
